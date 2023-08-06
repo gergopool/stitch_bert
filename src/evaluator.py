@@ -1,7 +1,25 @@
 import torch
+import numpy as np
+from .glue_metrics import Metric
+from torch.utils.data import DataLoader
+from transformers import BertForSequenceClassification as Bert
+from typing import Tuple
 
 
-def evaluate(model, data_loader):
+def predict(model: Bert,
+            data_loader: DataLoader,
+            mask: torch.tensor = None) -> Tuple(np.array, np.array):
+    """
+    Run the model on the data loader and return the predictions and labels.
+
+    Args:
+        model: The Bert model.
+        data_loader: The DataLoader object.
+        mask: The mask tensor.
+
+    Returns:
+        A tuple of numpy arrays for predictions and labels.
+    """
 
     # Get device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -9,6 +27,9 @@ def evaluate(model, data_loader):
     # Set model trainable
     trainable_was = model.training
     model.eval().to(device)
+
+    # Prepare mask
+    mask = None if mask is None else mask.clone().detach().to(device)
 
     preds, labels = [], []
     for batch in data_loader:
@@ -19,7 +40,8 @@ def evaluate(model, data_loader):
             "input_ids": batch[0],
             "token_type_ids": batch[2],
             "attention_mask": batch[1],
-            "labels": batch[3]
+            "labels": batch[3],
+            "head_mask": mask,
         }
 
         # Calculate loss
@@ -39,3 +61,23 @@ def evaluate(model, data_loader):
     model.train(trainable_was)
 
     return preds, labels
+
+
+def evaluate(model: Bert,
+             data_loader: DataLoader,
+             metric: Metric,
+             mask: torch.tensor = None) -> float:
+    """
+    Evaluate the model on the data loader using the provided metric.
+
+    Args:
+        model: The Bert model.
+        data_loader: The DataLoader object.
+        metric: The Metric object to be used for evaluation.
+        mask: The mask tensor.
+
+    Returns:
+        The evaluation score.
+    """
+    preds, labels = predict(model, data_loader, mask=mask)
+    return metric(labels, preds)

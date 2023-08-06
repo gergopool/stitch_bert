@@ -1,13 +1,17 @@
 import numpy as np
+from abc import ABC
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import matthews_corrcoef
-from scipy.special import softmax
 
+class Metric(ABC):
+    name = "Metric"
+    def __call__(self, y_pred: np.array, y_true: np.array) -> float:
+        raise NotImplementedError
 
 class Accuracy:
     name = 'Accuracy'
 
-    def __call__(self, y_pred, y_true):
+    def __call__(self, y_pred: np.array, y_true: np.array) -> float:
         y_pred = y_pred.argmax(axis=1)
         y_true = y_true.flatten()
         return np.mean(y_true == y_pred)
@@ -16,7 +20,7 @@ class Accuracy:
 class Correlation:
     name = 'Correlation'
 
-    def __call__(self, y_pred, y_true):
+    def __call__(self, y_pred: np.array, y_true: np.array) -> float:
         y_pred = y_pred.flatten()
         y_true = y_true.flatten()
         pearson_corr = pearsonr(y_pred, y_true)[0]

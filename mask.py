@@ -1,0 +1,116 @@
+import os
+import argparse
+import torch
+from transformers import AutoTokenizer
+from torch.utils.data import DataLoader
+
+# Import custom modules
+from src import Logger
+from src.data import load_glue_data_from_args
+from src.models import build_pretrained_transformer
+from src.glue_metrics import get_metric_for
+from src.mask_utils import mask_heads
+
+
+def main(args):
+
+    # Build and load model
+    model_path = os.path.join(args.finetune_dir, f"{args.task}_{args.seed}.pt")
+    model = build_pretrained_transformer(args.model_type, args.task)
+    model.load_state_dict(torch.load(model_path))
+    model.eval()
+    Logger.info(f"Model loaded from file {model_path}.")
+
+    # Create dataloader
+    tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=False)
+    val_dataset = load_glue_data_from_args(args, tokenizer, dev=True)
+    test_loader = DataLoader(val_dataset,
+                             batch_size=args.batch_size,
+                             shuffle=False,
+                             pin_memory=True,
+                             drop_last=False,
+                             num_workers=2)
+    Logger.info(f"Dataloader initialized.")
+
+    # Get the metric
+    metric = get_metric_for(args.task)
+
+    # Get mask
+    mask = mask_heads(model, test_loader, metric, args.stop_threshold, args.drop_ratio)
+    Logger.info(f"Mask generation is done.")
+
+    # Save mask
+    os.makedirs(args.out_dir, exist_ok=True)
+    save_path = os.path.join(args.out_dir, f"{args.task}_{args.seed}.pt")
+    torch.save(mask, save_path)
+    Logger.info(f"Mask saved to {save_path}.")
+
+
+def parse_args():
+
+    parser = argparse.ArgumentParser()
+
+    # Define the argparse arguments
+    parser.add_argument("task",
+                        type=str,
+                        choices=['cola', 'mnli', 'mrpc', 'qnli', \
+                                 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli',],
+                        help="Name of the task (dataset).")
+    parser.add_argument("--seed",
+                        type=int,
+                        help="Seed of the model. Note: masking is determinsitic, " + \
+                             "it has no effect on the results.")
+    parser.add_argument("--data_dir",
+                        type=str,
+                        default='/data/shared/data/glue_data',
+                        help="Directory where the data is located.")
+    parser.add_argument("--model_type",
+                        type=str,
+                        default='bert-base-uncased',
+                        help="Type of the model. Default is 'bert-base-uncased'.")
+    parser.add_argument("--stop_threshold",
+                        type=float,
+                        default=0.9,
+                        help="Threshold of permitted performance drop. Default is 0.9.")
+    parser.add_argument("--drop_ratio",
+                        type=float,
+                        default=0.1,
+                        help="Ratio of number of parameters to be dropped per step. " + \
+                             "Default is 0.1.")
+    parser.add_argument("--overwrite_cache",
+                        action='store_true',
+                        help="If True, overwrite the cached data. Default is False.")
+    parser.add_argument("--max_seq_length",
+                        type=int,
+                        default=128,
+                        help="Maximum sequence length for the tokenized data. Default is 128.")
+    parser.add_argument("--batch_size",
+                        type=int,
+                        default=128,
+                        help="Batch size for training. Default is 32.")
+    parser.add_argument("--out_dir",
+                        type=str,
+                        default='results/masks/',
+                        help="Directory to save the output. Default is 'results/masks/'.")
+    parser.add_argument("--finetune_dir",
+                        type=str,
+                        default='results/finetune/',
+                        help="Directory which contains the finetuned models. " + \
+                             "Default is 'results/finetune'")
+    parser.add_argument("--debug", action='store_true', help="Run in debug mode. Default is False.")
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    return args
+
+
+if __name__ == "__main__":
+    # Parse the command line arguments
+    args = parse_args()
+
+    # Initialize logging
+    Logger.initialise(args.debug)
+
+    # Execute the main function
+    main(args)

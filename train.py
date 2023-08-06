@@ -88,8 +88,7 @@ def train(model, train_dataset, val_dataset, metric, n_iters, batch_size):
             # Save model if this is the best
             iters_done += 1
             if iters_done % 200 == 0:
-                preds, true_y = evaluate(model, test_loader)
-                metric_value = metric(preds, true_y)
+                metric_value = evaluate(model, test_loader, metric)
                 if best_metric is None or best_metric < metric_value:
                     Logger.info(
                         f"{iters_done:4d}/{n_iters}: Improved to {metric_value:.2f}! Saved.")
@@ -172,8 +171,7 @@ def parse_args():
                         default=0,
                         help="The random seed of the run, for reproducibility. Default is 0.")
     parser.add_argument("--overwrite_cache",
-                        type=bool,
-                        default=False,
+                        action='store_true',
                         help="If True, overwrite the cached data. Default is False.")
     parser.add_argument("--max_seq_length",
                         type=int,
