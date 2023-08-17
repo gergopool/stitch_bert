@@ -3,6 +3,8 @@ import torch
 from torch.utils.data import TensorDataset
 from transformers import glue_processors, glue_output_modes, glue_convert_examples_to_features
 from transformers import AutoTokenizer
+import json
+import random
 
 from . import Logger
 
@@ -69,6 +71,104 @@ def load_glue_data(data_dir: str,
     # Convert to Tensors and build dataset
     return build_dataset(features, task)
 
+
+def split_data(dataset, train_sample_lang = 0, eval_sample_lang = 0, test_sample_lang = 0):
+    """
+    Split the dataset into train, validation, and test sets.
+
+    Parameters:
+    - dataset: List of strings representing sentences.
+    - train_sample_lang: int, number of samples to take from the training set. If set to 0, take all training examples.
+    - eval_sample_lang: int, number of samples to take from the validation set. If set to 0, take all validation examples.
+    - test_sample_lang: int, number of samples to take from the test set. If set to 0, take all test examples.
+
+    Returns:
+    - all_splits: List containing train, validation, and test splits.
+    """
+ 
+    dataset_length = len(dataset)
+    random.seed(0)
+    random.shuffle(dataset)
+
+    # Divide the data into three sets
+    train_size = int(dataset_length * 0.8)
+    val_size = int(dataset_length * 0.1)
+
+    all_splits = []
+    for split in ['train','validation','test']:
+        if split == 'train':
+            start, end = 0, train_size
+            sample_n = train_sample_lang
+        elif split == 'validation':
+            start, end = train_size, train_size + val_size
+            sample_n = eval_sample_lang 
+        elif split == 'test':
+            start, end = train_size + val_size, dataset_length
+            sample_n = test_sample_lang
+
+        split_list = dataset[start:end]
+
+        # take samples from split
+        if sample_n != 0:
+            split_list = split_list[:sample_n]
+
+        all_splits.append(split_list)
+
+    return all_splits
+
+def load_wikipedia(langs, train_samples = 0, eval_samples = 0, test_samples = 0):
+    """
+    Load Wikipedia data.
+
+    Parameters:
+    - langs: list of strings representing the languages we are interested
+    - train_samples: int number of training samples. If set to 0, all training examples will be loaded.
+    - eval_samples: int number of validation samples. If set to 0, all validation examples will be loaded.
+    - test_samples: int number of test samples. If set to 0, all test examples will be loaded.
+
+    Returns:
+    - train_all_languages: dict where keys are language strings and values are lists of training samples from each language
+    - val_all_languages: dict where keys are language strings and values are lists of validation samples from each language
+    - test_all_languages: dict where keys are language strings and values are lists of test samples from each language
+    """
+    train_all_languages = {}
+    val_all_languages = {}
+    test_all_languages = {}
+
+    # number of samples per language. Assume we want equal amount of data for every language.
+    n_train_sample_lang, n_eval_sample_lang, n_test_sample_lang = int(train_samples/len(langs)), int(eval_samples/len(langs)), int(test_samples/len(langs))
+
+    for language in langs:
+        path = os.path.join(f'{language}.data.json', 'AA', f"wiki_00")
+
+        train_all_languages[language] = []
+        val_all_languages[language] = []
+        test_all_languages[language] = []
+
+        with open(path, 'r') as input_file:
+            examples = []
+
+            for line in input_file:
+                doc = json.loads(line)
+
+                # remove unnecessary chars and tags
+                text = doc["text"].strip()
+                if text == "":
+                    continue
+                text = text.replace("\n", " ")
+                text = text.replace("[...]", "")
+                if "src=" in text: 
+                    continue
+                
+                examples.append(text) 
+
+            train, val, test = split_data(examples, n_train_sample_lang, n_eval_sample_lang, n_test_sample_lang)
+
+            train_all_languages[language] = train
+            val_all_languages[language] = val
+            test_all_languages[language] = test
+
+    return train_all_languages, val_all_languages, test_all_languages
 
 def load_from_cache(cached_features_file: str,
                     overwrite_cache: bool,
