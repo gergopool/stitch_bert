@@ -8,7 +8,7 @@ from typing import Tuple
 
 def predict(model: Bert,
             data_loader: DataLoader,
-            mask: torch.tensor = None) -> Tuple(np.array, np.array):
+            mask: torch.tensor = None) -> Tuple[np.array, np.array]:
     """
     Run the model on the data loader and return the predictions and labels.
 
