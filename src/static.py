@@ -52,3 +52,7 @@ class Logger:
     @staticmethod
     def warning(*args, **kwargs):
         return Logger._logger.warning(*args, **kwargs)
+
+
+class GlobalState:
+    debug = False
