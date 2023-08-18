@@ -21,7 +21,7 @@ jobs:
         pip install -r requirements.txt
 
     - name: Run train.py
-      run: CUDA_VISIBLE_DEVICES=-1 python train.py cola --seed 0
+      run: CUDA_VISIBLE_DEVICES=-1 python train.py cola --seed 0 --data_dir .github/workflows/data
 
     - name: Run mask.py
-      run: CUDA_VISIBLE_DEVICES=-1 python mask.py cola 0
+      run: CUDA_VISIBLE_DEVICES=-1 python mask.py cola 0 --data_dir .github/workflows/data
