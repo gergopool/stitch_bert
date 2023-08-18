@@ -106,12 +106,14 @@ def mask_heads(model: Bert,
 
         # Sort heads by importance
         head_importance[head_mask == 0.0] = float("Inf")
-        selected_heads_to_mask = head_importance.view(-1).sort()[1]
-        selected_heads_to_mask = selected_heads_to_mask[selected_heads_to_mask != float(
-            "Inf")][:num_to_mask]
+        head_importance, heads_to_mask = head_importance.view(-1).sort()
+        heads_to_mask = heads_to_mask[head_importance != float("Inf")]
 
-        if len(selected_heads_to_mask) == 0:
+        if len(heads_to_mask) < num_to_mask:
+            Logger.info("Nothing more to mask")
             break
+
+        selected_heads_to_mask = heads_to_mask[:num_to_mask]
 
         # Mask heads
         for head in selected_heads_to_mask:
