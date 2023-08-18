@@ -96,6 +96,10 @@ def mask_heads(model: Bert,
     new_head_mask = torch.ones_like(head_importance)
     num_to_mask = max(1, int(new_head_mask.numel() * masking_amount))
 
+    # Ensure original score is non-zero in debug mode
+    if GlobalState.debug and original_score == 0.0:
+        original_score = 1.
+
     current_score = original_score
     while current_score >= stop_at:
         head_mask = new_head_mask.clone()  # save current head mask

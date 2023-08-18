@@ -18,9 +18,13 @@ def main(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model_path = os.path.join(args.finetune_dir, f"{args.task}_{args.seed}.pt")
     model = build_pretrained_transformer(args.model_type, args.task)
-    model.load_state_dict(torch.load(model_path, map_location=device))
+    if not GlobalState.debug:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        model.load_state_dict(torch.load(model_path, map_location=device))
+        Logger.info(f"Model loaded from file {model_path}.")
+    else:
+        Logger.info(f"Random model is used in debug mode.")
     model.eval()
-    Logger.info(f"Model loaded from file {model_path}.")
 
     # Create dataloader
     tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=False)
