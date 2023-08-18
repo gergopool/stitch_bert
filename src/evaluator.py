@@ -5,10 +5,12 @@ from torch.utils.data import DataLoader
 from transformers import BertForSequenceClassification as Bert
 from typing import Tuple
 
+from .static import GlobalState
+
 
 def predict(model: Bert,
             data_loader: DataLoader,
-            mask: torch.tensor = None) -> Tuple(np.array, np.array):
+            mask: torch.tensor = None) -> Tuple[np.array, np.array]:
     """
     Run the model on the data loader and return the predictions and labels.
 
@@ -32,7 +34,7 @@ def predict(model: Bert,
     mask = None if mask is None else mask.clone().detach().to(device)
 
     preds, labels = [], []
-    for batch in data_loader:
+    for iter_i, batch in enumerate(data_loader):
 
         # Prepare input
         batch = tuple(t.to(device) for t in batch)
@@ -52,6 +54,10 @@ def predict(model: Bert,
         # Get predictions
         preds.append(outputs[1].cpu().detach())
         labels.append(batch[3].cpu().detach())
+
+        # Quick after three iterations in debug mode
+        if GlobalState.debug and iter_i >= 2:
+            break
 
     # Concatenate predictions and labels
     preds = torch.cat(preds, dim=0).numpy()
@@ -80,4 +86,4 @@ def evaluate(model: Bert,
         The evaluation score.
     """
     preds, labels = predict(model, data_loader, mask=mask)
-    return metric(labels, preds)
+    return metric(preds, labels)

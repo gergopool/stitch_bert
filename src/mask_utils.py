@@ -4,7 +4,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from transformers import BertForSequenceClassification as Bert
 from typing import Tuple
-from .static import Logger
+from .static import Logger, GlobalState
 
 
 def compute_heads_importance(
@@ -38,7 +38,7 @@ def compute_heads_importance(
 
     fake_opt = torch.optim.Adam([head_mask] + list(model.parameters()), lr=0.0)
 
-    for batch in tqdm(data_loader, desc="Importance score computation"):
+    for iter_i, batch in enumerate(tqdm(data_loader, desc="Importance score computation")):
         input_ids, input_mask, segment_ids, label_ids = tuple(t.to(device) for t in batch)
 
         outputs = model(input_ids,
@@ -56,6 +56,10 @@ def compute_heads_importance(
         preds.append(logits.detach().cpu())
         labels.append(label_ids.detach().cpu())
         tot_tokens += input_mask.float().detach().sum().data
+
+        if GlobalState.debug and iter_i >= 2:
+            Logger.info("Breaking the loop for debug purposes.")
+            break
 
     # Normalize the importance over layers
     head_importance /= tot_tokens
@@ -92,6 +96,10 @@ def mask_heads(model: Bert,
     new_head_mask = torch.ones_like(head_importance)
     num_to_mask = max(1, int(new_head_mask.numel() * masking_amount))
 
+    # Ensure original score is non-zero in debug mode
+    if GlobalState.debug and original_score == 0.0:
+        original_score = 1.
+
     current_score = original_score
     while current_score >= stop_at:
         head_mask = new_head_mask.clone()  # save current head mask
@@ -121,5 +129,9 @@ def mask_heads(model: Bert,
             f"Model performance: {current_score:.2f}/{original_score:.2} ({performance_meter:.2f}%)"
         )
         Logger.info(f"Model size: {new_size}/{orig_size} ({size_meter:.2f}%) ")
+
+        if GlobalState.debug:
+            Logger.info("Breaking the loop for debug purposes.")
+            break
 
     return head_mask.detach().cpu()

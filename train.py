@@ -11,7 +11,7 @@ from src.models import build_pretrained_transformer
 from src.utils import set_seed
 from src.glue_metrics import get_metric_for
 from src.evaluator import evaluate
-from src import Logger
+from src import Logger, GlobalState
 
 
 def train(model, train_dataset, val_dataset, metric, n_iters, batch_size):
@@ -29,6 +29,11 @@ def train(model, train_dataset, val_dataset, metric, n_iters, batch_size):
     Returns:
         The trained model.
     """
+
+    # Set number of iterations to 3 if in debug mode
+    if GlobalState.debug:
+        n_iters = 3
+        batch_size = 4
 
     # Get device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -87,7 +92,7 @@ def train(model, train_dataset, val_dataset, metric, n_iters, batch_size):
 
             # Save model if this is the best
             iters_done += 1
-            if iters_done % 200 == 0:
+            if iters_done % min(200, n_iters) == 0:
                 metric_value = evaluate(model, test_loader, metric)
                 if best_metric is None or best_metric < metric_value:
                     Logger.info(
@@ -142,10 +147,13 @@ def main(args):
     Logger.info(f"Training finished..")
 
     # Save the trained model
-    save_path = os.path.join(args.out_dir, f"{args.task}_{args.seed}.pt")
-    os.makedirs(args.out_dir, exist_ok=True)
-    torch.save(model.state_dict(), save_path)
-    Logger.info(f"Finetuned model saved to {save_path}")
+    if not GlobalState.debug:
+        save_path = os.path.join(args.out_dir, f"{args.task}_{args.seed}.pt")
+        os.makedirs(args.out_dir, exist_ok=True)
+        torch.save(model.state_dict(), save_path)
+        Logger.info(f"Finetuned model saved to {save_path}")
+    else:
+        Logger.info(f"Finetuned model not saved due to debug mode.")
 
 
 def parse_args():
@@ -201,7 +209,8 @@ if __name__ == "__main__":
     # Parse the command line arguments
     args = parse_args()
 
-    # Initialize logging
+    # Initialize logging and debug mode
+    GlobalState.debug = args.debug
     Logger.initialise(args.debug)
 
     # Execute the main function

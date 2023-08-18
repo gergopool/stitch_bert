@@ -5,7 +5,7 @@ from transformers import AutoTokenizer
 from torch.utils.data import DataLoader
 
 # Import custom modules
-from src import Logger
+from src import Logger, GlobalState
 from src.data import load_glue_data_from_args
 from src.models import build_pretrained_transformer
 from src.glue_metrics import get_metric_for
@@ -15,17 +15,20 @@ from src.mask_utils import mask_heads
 def main(args):
 
     # Build and load model
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model_path = os.path.join(args.finetune_dir, f"{args.task}_{args.seed}.pt")
     model = build_pretrained_transformer(args.model_type, args.task)
-    model.load_state_dict(torch.load(model_path))
-    model.eval()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.load_state_dict(torch.load(model_path, map_location=device))
     Logger.info(f"Model loaded from file {model_path}.")
+    model.eval()
 
     # Create dataloader
     tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=False)
     val_dataset = load_glue_data_from_args(args, tokenizer, dev=True)
+    batch_size = args.batch_size if not GlobalState.debug else 4
     test_loader = DataLoader(val_dataset,
-                             batch_size=args.batch_size,
+                             batch_size=batch_size,
                              shuffle=False,
                              pin_memory=True,
                              drop_last=False,
@@ -40,10 +43,13 @@ def main(args):
     Logger.info(f"Mask generation is done.")
 
     # Save mask
-    os.makedirs(args.out_dir, exist_ok=True)
-    save_path = os.path.join(args.out_dir, f"{args.task}_{args.seed}.pt")
-    torch.save(mask, save_path)
-    Logger.info(f"Mask saved to {save_path}.")
+    if not GlobalState.debug:
+        os.makedirs(args.out_dir, exist_ok=True)
+        save_path = os.path.join(args.out_dir, f"{args.task}_{args.seed}.pt")
+        torch.save(mask, save_path)
+        Logger.info(f"Mask saved to {save_path}.")
+    else:
+        Logger.info(f"Mask is not saved in debug mode.")
 
 
 def parse_args():
@@ -56,7 +62,7 @@ def parse_args():
                         choices=['cola', 'mnli', 'mrpc', 'qnli', \
                                  'qqp', 'rte', 'sst-2', 'sts-b', 'wnli',],
                         help="Name of the task (dataset).")
-    parser.add_argument("--seed",
+    parser.add_argument("seed",
                         type=int,
                         help="Seed of the model. Note: masking is determinsitic, " + \
                              "it has no effect on the results.")
@@ -109,7 +115,8 @@ if __name__ == "__main__":
     # Parse the command line arguments
     args = parse_args()
 
-    # Initialize logging
+    # Initialize logging and debug mode
+    GlobalState.debug = args.debug
     Logger.initialise(args.debug)
 
     # Execute the main function
