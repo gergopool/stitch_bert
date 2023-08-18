@@ -1,45 +1,45 @@
-python retrain.py cola --seed 0
-python retrain.py cola --seed 1
-python retrain.py cola --seed 2
-python retrain.py cola --seed 3
-python retrain.py cola --seed 4
-python retrain.py mnli --seed 0
-python retrain.py mnli --seed 1
-python retrain.py mnli --seed 2
-python retrain.py mnli --seed 3
-python retrain.py mnli --seed 4
-python retrain.py mrpc --seed 0
-python retrain.py mrpc --seed 1
-python retrain.py mrpc --seed 2
-python retrain.py mrpc --seed 3
-python retrain.py mrpc --seed 4
-python retrain.py qnli --seed 0
-python retrain.py qnli --seed 1
-python retrain.py qnli --seed 2
-python retrain.py qnli --seed 3
-python retrain.py qnli --seed 4
-python retrain.py qqp --seed 0
-python retrain.py qqp --seed 1
-python retrain.py qqp --seed 2
-python retrain.py qqp --seed 3
-python retrain.py qqp --seed 4
-python retrain.py rte --seed 0
-python retrain.py rte --seed 1
-python retrain.py rte --seed 2
-python retrain.py rte --seed 3
-python retrain.py rte --seed 4
-python retrain.py sst-2 --seed 0
-python retrain.py sst-2 --seed 1
-python retrain.py sst-2 --seed 2
-python retrain.py sst-2 --seed 3
-python retrain.py sst-2 --seed 4
-python retrain.py sts-b --seed 0
-python retrain.py sts-b --seed 1
-python retrain.py sts-b --seed 2
-python retrain.py sts-b --seed 3
-python retrain.py sts-b --seed 4
-python retrain.py wnli --seed 0
-python retrain.py wnli --seed 1
-python retrain.py wnli --seed 2
-python retrain.py wnli --seed 3
-python retrain.py wnli --seed 4
+python retrain.py cola 0
+python retrain.py cola 1
+python retrain.py cola 2
+python retrain.py cola 3
+python retrain.py cola 4
+python retrain.py mnli 0
+python retrain.py mnli 1
+python retrain.py mnli 2
+python retrain.py mnli 3
+python retrain.py mnli 4
+python retrain.py mrpc 0
+python retrain.py mrpc 1
+python retrain.py mrpc 2
+python retrain.py mrpc 3
+python retrain.py mrpc 4
+python retrain.py qnli 0
+python retrain.py qnli 1
+python retrain.py qnli 2
+python retrain.py qnli 3
+python retrain.py qnli 4
+python retrain.py qqp 0
+python retrain.py qqp 1
+python retrain.py qqp 2
+python retrain.py qqp 3
+python retrain.py qqp 4
+python retrain.py rte 0
+python retrain.py rte 1
+python retrain.py rte 2
+python retrain.py rte 3
+python retrain.py rte 4
+python retrain.py sst-2 0
+python retrain.py sst-2 1
+python retrain.py sst-2 2
+python retrain.py sst-2 3
+python retrain.py sst-2 4
+python retrain.py sts-b 0
+python retrain.py sts-b 1
+python retrain.py sts-b 2
+python retrain.py sts-b 3
+python retrain.py sts-b 4
+python retrain.py wnli 0
+python retrain.py wnli 1
+python retrain.py wnli 2
+python retrain.py wnli 3
+python retrain.py wnli 4
