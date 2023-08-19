@@ -11,10 +11,10 @@ from src.models import build_pretrained_transformer
 from src.utils import set_seed
 from src.glue_metrics import get_metric_for
 from src.evaluator import evaluate
-from src import Logger
+from src import Logger, GlobalState
 
 
-def train(model, train_dataset, val_dataset, metric, n_iters, batch_size):
+def train(model, train_dataset, val_dataset, metric, n_iters, batch_size, head_mask=None):
     """
     Train a given model on a given train dataset for a specified number of iterations and batch size.
     Return with the best model based on the validation metric.
@@ -29,6 +29,11 @@ def train(model, train_dataset, val_dataset, metric, n_iters, batch_size):
     Returns:
         The trained model.
     """
+
+    # Set number of iterations to 3 if in debug mode
+    if GlobalState.debug:
+        n_iters = 3
+        batch_size = 4
 
     # Get device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -52,7 +57,7 @@ def train(model, train_dataset, val_dataset, metric, n_iters, batch_size):
                              num_workers=2)
 
     # Initialize training related objects
-    optimizer = torch.optim.Adam(model.parameters(), lr=3e-5)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=2e-5)
     scheduler = get_linear_schedule_with_warmup(optimizer, int(n_iters * 0.1), n_iters)
     scaler = torch.cuda.amp.GradScaler()
 
@@ -61,6 +66,7 @@ def train(model, train_dataset, val_dataset, metric, n_iters, batch_size):
     best_metric = None
     best_model = model
     iters_done = 0
+    no_improvement = 0
 
     while not finished:
         for batch in train_loader:
@@ -72,6 +78,9 @@ def train(model, train_dataset, val_dataset, metric, n_iters, batch_size):
                 "attention_mask": batch[1],
                 "labels": batch[3]
             }
+
+            if head_mask is not None:
+                inputs["head_mask"] = head_mask
 
             # Calculate loss
             with torch.cuda.amp.autocast(dtype=torch.float16):
@@ -87,18 +96,20 @@ def train(model, train_dataset, val_dataset, metric, n_iters, batch_size):
 
             # Save model if this is the best
             iters_done += 1
-            if iters_done % 200 == 0:
+            if iters_done % min(200, n_iters) == 0:
                 metric_value = evaluate(model, test_loader, metric)
                 if best_metric is None or best_metric < metric_value:
                     Logger.info(
                         f"{iters_done:4d}/{n_iters}: Improved to {metric_value:.2f}! Saved.")
                     best_metric = metric_value
                     best_model = deepcopy(model)
+                    no_improvement = 0
                 else:
                     Logger.info(f"{iters_done:4d}/{n_iters}: ({metric_value:.2f})")
+                    no_improvement += 1
 
             # Check if training should be finished
-            finished = iters_done >= n_iters
+            finished = iters_done >= n_iters or no_improvement >= 10
             if finished:
                 break
 
@@ -109,6 +120,14 @@ def train(model, train_dataset, val_dataset, metric, n_iters, batch_size):
     model.train(was_trainable)
 
     return model
+
+
+def load_datasets(args, tokenizer):
+    train_dataset = load_glue_data_from_args(args, tokenizer, dev=False)
+    val_dataset = load_glue_data_from_args(args, tokenizer, dev=True)
+    Logger.info(f"Training dataset is loaded with {len(train_dataset)} datapoints.")
+    Logger.info(f"Validation dataset is loaded with {len(val_dataset)} datapoints.")
+    return train_dataset, val_dataset
 
 
 def main(args):
@@ -125,10 +144,7 @@ def main(args):
     Logger.info("Pre-trained transformer initialized.")
 
     # Load the dataset
-    train_dataset = load_glue_data_from_args(args, tokenizer, dev=False)
-    val_dataset = load_glue_data_from_args(args, tokenizer, dev=True)
-    Logger.info(f"Training dataset is loaded with {len(train_dataset)} datapoints.")
-    Logger.info(f"Validation dataset is loaded with {len(val_dataset)} datapoints.")
+    train_dataset, val_dataset = load_datasets(args, tokenizer)
 
     # Train the model
     Logger.info(f"Training starts..")
@@ -142,10 +158,13 @@ def main(args):
     Logger.info(f"Training finished..")
 
     # Save the trained model
-    save_path = os.path.join(args.out_dir, f"{args.task}_{args.seed}.pt")
-    os.makedirs(args.out_dir, exist_ok=True)
-    torch.save(model.state_dict(), save_path)
-    Logger.info(f"Finetuned model saved to {save_path}")
+    if not GlobalState.debug:
+        save_path = os.path.join(args.out_dir, f"{args.task}_{args.seed}.pt")
+        os.makedirs(args.out_dir, exist_ok=True)
+        torch.save(model.state_dict(), save_path)
+        Logger.info(f"Finetuned model saved to {save_path}")
+    else:
+        Logger.info(f"Finetuned model not saved due to debug mode.")
 
 
 def parse_args():
@@ -179,7 +198,7 @@ def parse_args():
                         help="Maximum sequence length for the tokenized data. Default is 128.")
     parser.add_argument("--n_iterations",
                         type=int,
-                        default=2000,
+                        default=10000,
                         help="Number of training iterations. Default is 1000.")
     parser.add_argument("--batch_size",
                         type=int,
@@ -201,7 +220,8 @@ if __name__ == "__main__":
     # Parse the command line arguments
     args = parse_args()
 
-    # Initialize logging
+    # Initialize logging and debug mode
+    GlobalState.debug = args.debug
     Logger.initialise(args.debug)
 
     # Execute the main function

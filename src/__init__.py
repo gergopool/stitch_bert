@@ -1,1 +1,1 @@
-from .static import Logger
+from .static import Logger, GlobalState
