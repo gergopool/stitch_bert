@@ -156,7 +156,7 @@ def parse_args():
     parser.add_argument(
         "task",
         type=str,
-        choices=['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli'],
+        choices=['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli','mlm'],
         help="Name of the task (dataset).")
     parser.add_argument("--data_dir",
                         type=str,
