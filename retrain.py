@@ -7,7 +7,7 @@ from transformers import AutoTokenizer
 from src import Logger, GlobalState
 from src.models import build_pretrained_transformer
 from src.utils import set_seed
-from src.glue_metrics import get_metric_for
+from src.task_metrics import get_metric_for
 from train import train, load_datasets
 
 
@@ -44,7 +44,9 @@ def main(args):
                   metric,
                   n_iters=args.n_iterations,
                   batch_size=args.batch_size,
-                  head_mask=head_mask)
+                  head_mask=head_mask,
+                  task=args.task,
+                  tokenizer=tokenizer)
     Logger.info(f"Retraining finished..")
 
     # Save the retrained model
@@ -64,7 +66,7 @@ def parse_args():
     parser.add_argument(
         "task",
         type=str,
-        choices=['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli'],
+        choices=['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli','mlm'],
         help="Name of the task (dataset).")
     parser.add_argument("seed", type=int, help="The random seed of the run, for reproducibility.")
     parser.add_argument("--data_dir",
@@ -74,7 +76,7 @@ def parse_args():
     parser.add_argument("--model_type",
                         type=str,
                         default='bert-base-uncased',
-                        help="Type of the model. Default is 'bert-base-uncased'.")
+                        help="Type of the model. Default is 'bert-base-uncased'. Use xlm-roberta-base for MLM task")
     parser.add_argument("--overwrite_cache",
                         action='store_true',
                         help="If True, overwrite the cached data. Default is False.")

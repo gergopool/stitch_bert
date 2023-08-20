@@ -2,15 +2,16 @@ import os
 import argparse
 import torch
 from transformers import AutoTokenizer
+from transformers import DataCollatorForLanguageModeling
 from torch.utils.data import DataLoader
+
 
 # Import custom modules
 from src import Logger, GlobalState
-from src.data import load_glue_data_from_args
+from src.data import load_data_from_args
 from src.models import build_pretrained_transformer
-from src.glue_metrics import get_metric_for
+from src.task_metrics import get_metric_for
 from src.mask_utils import mask_heads
-
 
 def main(args):
 
@@ -25,14 +26,17 @@ def main(args):
 
     # Create dataloader
     tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=False)
-    val_dataset = load_glue_data_from_args(args, tokenizer, dev=True)
+    val_dataset = load_data_from_args(args, tokenizer, dev=True)
     batch_size = args.batch_size if not GlobalState.debug else 4
+    collate_fn = DataCollatorForLanguageModeling(tokenizer=tokenizer) if args.task == 'mlm' else None
+
     test_loader = DataLoader(val_dataset,
                              batch_size=batch_size,
                              shuffle=False,
                              pin_memory=True,
                              drop_last=False,
-                             num_workers=2)
+                             num_workers=2,
+                             collate_fn=collate_fn)
     Logger.info(f"Dataloader initialized.")
 
     # Get the metric
@@ -60,7 +64,7 @@ def parse_args():
     parser.add_argument("task",
                         type=str,
                         choices=['cola', 'mnli', 'mrpc', 'qnli', \
-                                 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli',],
+                                 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli','mlm'],
                         help="Name of the task (dataset).")
     parser.add_argument("seed",
                         type=int,
@@ -73,7 +77,7 @@ def parse_args():
     parser.add_argument("--model_type",
                         type=str,
                         default='bert-base-uncased',
-                        help="Type of the model. Default is 'bert-base-uncased'.")
+                        help="Type of the model. Default is 'bert-base-uncased'. Use xlm-roberta-base for MLM task")
     parser.add_argument("--stop_threshold",
                         type=float,
                         default=0.9,

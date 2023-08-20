@@ -1,9 +1,10 @@
 import torch
 import numpy as np
-from .glue_metrics import Metric
+from .task_metrics import Metric
 from torch.utils.data import DataLoader
 from transformers import BertForSequenceClassification as Bert
 from typing import Tuple
+from torch.utils.data import TensorDataset
 
 from .static import GlobalState
 
@@ -36,15 +37,18 @@ def predict(model: Bert,
     preds, labels = [], []
     for iter_i, batch in enumerate(data_loader):
 
-        # Prepare input
-        batch = tuple(t.to(device) for t in batch)
-        inputs = {
-            "input_ids": batch[0],
-            "token_type_ids": batch[2],
-            "attention_mask": batch[1],
-            "labels": batch[3],
-            "head_mask": mask,
-        }
+        if isinstance(data_loader.dataset, TensorDataset):
+            # Prepare input
+            batch = tuple(t.to(device) for t in batch)
+            inputs = {
+                "input_ids": batch[0],
+                "token_type_ids": batch[2],
+                "attention_mask": batch[1],
+                "labels": batch[3],
+                "head_mask": mask,
+            }
+        else:
+            inputs = {key: value.to(device) for key, value in batch.items()}
 
         # Calculate loss
         with torch.no_grad():
@@ -53,7 +57,7 @@ def predict(model: Bert,
 
         # Get predictions
         preds.append(outputs[1].cpu().detach())
-        labels.append(batch[3].cpu().detach())
+        labels.append(inputs['labels'].cpu().detach())
 
         # Quick after three iterations in debug mode
         if GlobalState.debug and iter_i >= 2:
