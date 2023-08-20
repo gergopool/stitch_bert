@@ -12,22 +12,43 @@ import torch.utils.data as data
 from torch.utils.data import TensorDataset
 
 class MLM_Dataset(data.Dataset):
+    "PyTorch Dataset class for Masked Language Model (MLM) data."
     def __init__(self, train_input_ids, train_attention_mask):
+        """
+        Initialize the MLM_Dataset.
+
+        Parameters:
+        - train_input_ids: tensor of input token IDs for the training data.
+        - train_attention_mask: tensor of attention mask values for the training data.
+        """
         self.train_input_ids, self.train_attention_mask = train_input_ids, train_attention_mask
 
     def __len__(self):
+        """
+        Get the total number of data points in the dataset.
+
+        Returns:
+        - int: Total number of data points in the dataset.
+        """
         return len(self.train_input_ids)
     
     def __getitem__(self, idx):
-        # Return the idx-th data point of the dataset
-        # If we have multiple things to return (data point and label), we can return them as tuple
+        """
+        Get the idx-th data point from the dataset.
+
+        Parameters:
+        - idx: int, Index of the desired data point.
+
+        Returns:
+            dict: A dictionary containing the 'input_ids' and 'attention_mask' for the idx-th data point.
+        """
         train_input_ids = self.train_input_ids[idx]
         train_attention_mask = self.train_attention_mask[idx]
         return {'input_ids':train_input_ids,'attention_mask':train_attention_mask}
 
 def load_data_from_args(args, tokenizer, dev=False):
     """
-    Load and cache examples from GLUE dataset given command line arguments.
+    Load and cache examples from GLUE or MLM dataset given command line arguments.
 
     Parameters:
     - args: Argparse arguments.
@@ -57,6 +78,20 @@ def load_mlm_data(data_dir: str,
                    overwrite_cache: bool = False,
                    max_seq_length: int = 128,
                    ):
+    """
+    Load masked language model (MLM) data.
+
+    Parameters:
+    - data_dir: The directory containing the data.
+    - task: A string identifier for the specific task or dataset.
+    - tokenizer: AutoTokenizer instance
+    - dev: If True, loads the development (dev) data. Otherwise, loads the training data. Default is False.
+    - overwrite_cache: If True, overwrite the cached features file. Default is False.
+    - max_seq_length: The maximum sequence length for tokenization. Default is 128.
+
+    Returns:
+    - dataset: The loaded dataset in a suitable format for MLM.
+    """
     mode = "dev" if dev else "train"
 
     cached_features_file = os.path.join(data_dir, f"cached_{max_seq_length}_{task}.pt")
@@ -116,7 +151,7 @@ def load_glue_data(data_dir: str,
     return build_dataset(features, task)
 
 
-def split_data(dataset, train_sample_lang = 0, eval_sample_lang = 0, test_sample_lang = 0):
+def split_data(dataset, train_sample_lang: int = 0, eval_sample_lang: int = 0, test_sample_lang: int = 0):
     """
     Shuffle and then split the dataset into train, validation, and test sets.
 
@@ -200,63 +235,20 @@ def load_glue_from_cache(cached_features_file: str,
 
     return features
 
-def split_data(dataset, train_sample_lang = 0, eval_sample_lang = 0, test_sample_lang = 0):
+def preprocess_wikipedia(data_dir: str, tokenizer: AutoTokenizer, max_seq_length = 128):
     """
-    Shuffle and then split the dataset into train, validation, and test sets.
+    Load and tokenize Wikipedia data. We take as many samples they are defined in the __init__.py file
+    I take the same amount of data for every language
 
     Parameters:
-    - dataset: List of strings representing sentences.
-    - train_sample_lang: int, number of samples to take from the training set. If set to 0, take all training examples.
-    - eval_sample_lang: int, number of samples to take from the validation set. If set to 0, take all validation examples.
-    - test_sample_lang: int, number of samples to take from the test set. If set to 0, take all test examples.
+    - data_dir: Directory path where the data is stored.
+    - tokenizer: Tokenizer used to tokenize the text.
+    - max_seq_length: Maximum sequence length for tokenization. Default is 128.
 
     Returns:
-    - all_splits: List containing train, validation, and test splits.
-    """
- 
-    dataset_length = len(dataset)
-    random.seed(0)
-    random.shuffle(dataset)
-
-    # Divide the data into three sets and then 
-    train_size = int(dataset_length * 0.8)
-    val_size = int(dataset_length * 0.1)
-
-    all_splits = []
-    for split in ['train','validation','test']:
-        if split == 'train':
-            start, end = 0, train_size
-            sample_n = train_sample_lang
-        elif split == 'validation':
-            start, end = train_size, train_size + val_size
-            sample_n = eval_sample_lang 
-        elif split == 'test':
-            start, end = train_size + val_size, dataset_length
-            sample_n = test_sample_lang
-
-        split_list = dataset[start:end]
-
-        # take samples from split
-        if sample_n != 0:
-            split_list = split_list[:sample_n]
-
-        all_splits.append(split_list)
-
-    return all_splits
-
-def preprocess_wikipedia(data_dir, tokenizer, max_seq_length = 128):
-    """
-    Load and tokenize Wikipedia data.
-
-    Parameters:
-    - train_samples: int number of training samples. If set to 0, all training examples will be loaded.
-    - eval_samples: int number of validation samples. If set to 0, all validation examples will be loaded.
-    - test_samples: int number of test samples. If set to 0, all test examples will be loaded.
-
-    Returns:
-    - train_all_languages: dict where keys are language strings and values are lists of training samples from each language
-    - val_all_languages: dict where keys are language strings and values are lists of validation samples from each language
-    - test_all_languages: dict where keys are language strings and values are lists of test samples from each language
+    - train_all_languages: List of tokenized training samples from all languages.
+    - val_all_languages: List of tokenized validation samples from all languages.
+    - test_all_languages: List of tokenized test samples from all languages.
     """
     train_all_languages = []
     val_all_languages = []
@@ -270,10 +262,6 @@ def preprocess_wikipedia(data_dir, tokenizer, max_seq_length = 128):
                                                                    
     for language in langs:
         path = os.path.join(data_dir, f'{language}.data.json', 'AA', f"wiki_00")
-
-        # train_all_languages[language] = []
-        # val_all_languages[language] = []
-        # test_all_languages[language] = []
 
         with open(path, 'r') as input_file:
             examples = []
@@ -321,21 +309,19 @@ def load_wikipedia_from_cache(cached_features_file: str,
     - cached_features_file: Path to the cache file.
     - overwrite_cache: If True, overwrite the cached data.
     - data_dir: Directory where the data is located.
-    - task: Name of the task (dataset).
-    - model_type: Type of the model.
     - tokenizer: AutoTokenizer instance.
     - max_seq_length: Maximum sequence length for the tokenized data.
-    - dev: Whether to use evaluation data. If False, training data will be used.
+    - mode: Either dev or train.
 
     Returns:
-    - features: A list of InputFeatures.
+    - dataset: torch.utils.Dataset.
     """
     if os.path.exists(f'{mode}_'+cached_features_file) and not overwrite_cache:
         Logger.info("Loading features from cached file %s", cached_features_file)
         dataset = torch.load(f'{mode}_'+cached_features_file)
     else:
         Logger.info("Creating features from dataset file at %s", data_dir)
-        train_dataset, val_dataset, test_dataset = create_features_from_wikipedia_dataset(data_dir,
+        train_dataset, val_dataset, test_dataset = create_wikipedia_dataset(data_dir,
                                  tokenizer,
                                  max_seq_length)
         
@@ -387,10 +373,22 @@ def create_features_from_glue_dataset(data_dir: str,
 
     return features
 
-def create_features_from_wikipedia_dataset(data_dir: str,
+def create_wikipedia_dataset(data_dir: str,
                                  tokenizer: AutoTokenizer,
                                  max_seq_length: int):
-    
+    """
+    Creates features for a Wikipedia dataset to be used.
+
+    Parameters:
+        data_dir: Path to the directory containing the Wikipedia dataset.
+        tokenizer: Tokenizer to convert text into tokenized input.
+        max_seq_length: Maximum sequence length for tokenized inputs.
+
+    Returns:
+        train_dataset: A dataset containing training features.
+        val_dataset: A dataset containing validation features.
+        test_dataset: A dataset containing test features.
+    """
     train_all_languages, val_all_languages, test_all_languages = preprocess_wikipedia(data_dir, tokenizer, max_seq_length)
     
     train_input_ids, train_attention_mask = input_features(train_all_languages)
@@ -404,6 +402,17 @@ def create_features_from_wikipedia_dataset(data_dir: str,
     return train_dataset, val_dataset, test_dataset
 
 def input_features(features):
+    """
+    Converts a list of feature objects into tensors representing input IDs and attention masks.
+
+    Parameters:
+    - features: A list of features containing, among others, input_ids and attention_mask attributes.
+
+    Returns:
+    - tuple: A tuple containing two torch tensors - all_input_ids and all_attention_mask.
+               - all_input_ids: A tensor containing input IDs for all features.
+               - all_attention_mask: A tensor containing attention masks for all features.
+    """
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
     all_attention_mask = torch.tensor([f.attention_mask for f in features], dtype=torch.long)
     return all_input_ids, all_attention_mask

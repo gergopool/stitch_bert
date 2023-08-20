@@ -27,7 +27,9 @@ def train(model, train_dataset, val_dataset, metric, n_iters, batch_size, task, 
         metric: The metric to be used for evaluation.
         n_iters: The number of iterations for training.
         batch_size: The size of the batch for training.
-
+        task (str): Description of the task being performed. If set to "mlm", we use DataCollatorForLanguageModeling.
+        tokenizer: The tokenizer to convert input data into model-readable format.
+        
     Returns:
         The trained model.
     """
@@ -88,7 +90,7 @@ def train(model, train_dataset, val_dataset, metric, n_iters, batch_size, task, 
                     "attention_mask": batch[1],
                     "labels": batch[3]
                 }
-            else:
+            else: # for mlm
                 inputs = {key: value.to(device) for key, value in batch.items()}
 
             if head_mask is not None:
