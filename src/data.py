@@ -16,8 +16,14 @@ def load_glue_data_from_args(args, tokenizer, dev=False):
     - tokenizer: AutoTokenizer instance.
     - dev: Whether to use evaluation data. If False, training data will be used.
     """
+    if hasattr(args, 'task'):
+        task = args.task
+    elif hasattr(args, 'task2'):
+        task = args.task2
+    else:
+        raise ValueError("args must have either 'task' or 'task2' attribute.")
     return load_glue_data(data_dir=args.data_dir,
-                          task=args.task,
+                          task=task,
                           tokenizer=tokenizer,
                           dev=dev,
                           model_type=args.model_type,

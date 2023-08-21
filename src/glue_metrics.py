@@ -3,10 +3,13 @@ from abc import ABC
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import matthews_corrcoef
 
+
 class Metric(ABC):
     name = "Metric"
+
     def __call__(self, y_pred: np.array, y_true: np.array) -> float:
         raise NotImplementedError
+
 
 class Accuracy:
     name = 'Accuracy'

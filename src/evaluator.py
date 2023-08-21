@@ -48,8 +48,7 @@ def predict(model: Bert,
 
         # Calculate loss
         with torch.no_grad():
-            with torch.cuda.amp.autocast(dtype=torch.float16):
-                outputs = model(**inputs)
+            outputs = model(**inputs)
 
         # Get predictions
         preds.append(outputs[1].cpu().detach())
