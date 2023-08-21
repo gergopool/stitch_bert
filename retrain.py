@@ -8,7 +8,8 @@ from src import Logger, GlobalState
 from src.models import build_pretrained_transformer
 from src.utils import set_seed
 from src.glue_metrics import get_metric_for
-from train import train, load_datasets
+from src.trainer import train
+from train import load_datasets
 
 
 def main(args):
@@ -38,13 +39,13 @@ def main(args):
     # Retrain the model
     Logger.info(f"Retraining starts with the applied mask..")
     metric = get_metric_for(args.task)
-    model = train(model,
-                  train_dataset,
-                  val_dataset,
-                  metric,
-                  n_iters=args.n_iterations,
-                  batch_size=args.batch_size,
-                  head_mask=head_mask)
+    model, _ = train(model,
+                     train_dataset,
+                     val_dataset,
+                     metric,
+                     n_iters=args.n_iterations,
+                     batch_size=args.batch_size,
+                     head_mask=head_mask)
     Logger.info(f"Retraining finished..")
 
     # Save the retrained model
