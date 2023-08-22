@@ -6,8 +6,7 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
 from train import load_datasets
-from src.utils import set_seed
-from src.static import Logger, GlobalState
+from src.static import Logger, GlobalState, TASKS
 from src.models import build_pretrained_transformer
 from src.glue_metrics import get_metric_for, Metric
 from src.evaluator import evaluate
@@ -33,13 +32,14 @@ def load_mask(mask_dir: str, task: str, seed: int, device: torch.device) -> torc
 def get_model_performance(val_dataset: Dataset,
                           model: nn.Module,
                           head_mask: torch.Tensor,
+                          is_vis: bool,
                           metric: Metric) -> float:
     data_loader = DataLoader(val_dataset,
                              batch_size=32,
                              shuffle=False,
                              pin_memory=True,
                              drop_last=False)
-    return evaluate(model, data_loader, metric, head_mask)
+    return evaluate(model, data_loader, metric, is_vis, head_mask)
 
 
 def main(args):
@@ -59,7 +59,8 @@ def main(args):
     metric = get_metric_for(args.task)
 
     # Get benchmark performance
-    performance = get_model_performance(val_dataset, model, head_mask, metric)
+    is_vis = args.task in TASKS['vis']
+    performance = get_model_performance(val_dataset, model, head_mask, is_vis, metric)
     Logger.info(f"Model metric: {performance:.4f}")
 
 

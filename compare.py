@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from train import load_datasets
 from src.utils import set_seed
-from src.static import Logger, GlobalState
+from src.static import Logger, GlobalState, TASKS
 from src.compare import cka, jaccard_similarity, functional_similarity, calculate_embeddings
 from src.models import build_pretrained_transformer
 from src.glue_metrics import get_metric_for, Metric
@@ -32,13 +32,13 @@ def load_mask(mask_dir: str, task: str, seed: int, device: torch.device) -> torc
     return head_mask
 
 
-def get_model_performance(val_dataset: Dataset, model_info: dict, metric: Metric) -> float:
+def get_model_performance(val_dataset: Dataset, model_info: dict, is_vis:bool, metric: Metric) -> float:
     data_loader = DataLoader(val_dataset,
                              batch_size=32,
                              shuffle=False,
                              pin_memory=True,
                              drop_last=False)
-    return evaluate(model_info['model2'], data_loader, metric, model_info['mask2'])
+    return evaluate(model_info['model2'], data_loader, metric, is_vis, model_info['mask2'])
 
 
 def main(args):
@@ -65,7 +65,8 @@ def main(args):
     metric = get_metric_for(args.task2)
 
     # Get benchmark performance
-    model2_performance = get_model_performance(val_dataset, model_info, metric)
+    is_vis = args.task2 in TASKS['vis']
+    model2_performance = get_model_performance(val_dataset, model_info, is_vis, metric)
     Logger.info(f"Model2 metric: {model2_performance:.4f}")
 
     # Dictionary used to store results for jaccard, cka, and functional similarity

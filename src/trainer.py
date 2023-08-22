@@ -1,8 +1,9 @@
 import torch
 from torch import nn
+from tqdm import tqdm
 from copy import deepcopy
 from transformers import get_linear_schedule_with_warmup
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 
 from src.evaluator import evaluate
 from .static import GlobalState, Logger
@@ -10,13 +11,12 @@ from .glue_metrics import Metric
 
 
 def train(model: nn.Module,
-          train_dataset: Dataset,
-          val_dataset: Dataset,
+          train_loader: DataLoader,
+          val_loader: DataLoader,
           metric: Metric,
-          n_iters: int,
-          batch_size: int,
           head_mask: torch.Tensor = None,
           force_eval_mode: bool = False,
+          is_vis: bool = False,
           verbose: bool = True) -> nn.Module:
     """
     Train a given model on a given train dataset for a specified number of iterations and batch size.
@@ -24,21 +24,17 @@ def train(model: nn.Module,
 
     Args:
         model: The model to be trained.
-        dataset: The dataset to be used for training.
+        train_loader: The data loader for the training dataset.
+        val_loader: The data loader for the validation dataset.
         metric: The metric to be used for evaluation.
-        n_iters: The number of iterations for training.
-        batch_size: The size of the batch for training and evaluation.
         head_mask: The mask applied on heads.
         force_eval_mode: If True, the model will be set to eval mode during training.
+        is_vis: If True, we assume it is a vision task.
         verbose: If True, the training progress will be printed.
     Returns:
         The trained model.
     """
-
-    # Set number of iterations to 3 if in debug mode
-    if GlobalState.debug:
-        n_iters = 3
-        batch_size = 4
+    n_iters = len(train_loader)
 
     # Get device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -50,81 +46,72 @@ def train(model: nn.Module,
         model.train()
     model.to(device)
 
-    # Prepare data loaders
-    train_loader = DataLoader(train_dataset,
-                              batch_size=batch_size,
-                              shuffle=True,
-                              pin_memory=True,
-                              persistent_workers=True,
-                              num_workers=2)
-    test_loader = DataLoader(val_dataset,
-                             batch_size=batch_size,
-                             shuffle=False,
-                             pin_memory=True,
-                             persistent_workers=True,
-                             num_workers=2)
-
     # Initialize training related objects
-    optimizer = torch.optim.AdamW(model.parameters(), lr=2e-5)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
     scheduler = get_linear_schedule_with_warmup(optimizer, int(n_iters * 0.1), n_iters)
-
     if not GlobalState.debug:
         scaler = torch.cuda.amp.GradScaler()
 
-    # Train the model
-    finished = False
+    # Reset data_loader in case we want to use it again for exactly n_iters iterations
+    train_loader.batch_sampler.reset()
+
+    # Variables used for early stopping and saving the best model
     best_metric = None
     best_model = model
-    iters_done = 0
     no_improvement = 0
 
-    while not finished:
-        for batch in train_loader:
-            # Prepare input
-            batch = tuple(t.to(device) for t in batch)
+    # Start training
+    data_iter = tqdm(train_loader, desc='Training') if verbose else train_loader
+
+    for iter_i, batch in enumerate(data_iter):
+        # Prepare input
+        batch = tuple(t.to(device) for t in batch)
+        if is_vis:
+            inputs = {"pixel_values": batch[0], "labels": batch[1]}
+        else:
             inputs = {
                 "input_ids": batch[0],
                 "token_type_ids": batch[2],
                 "attention_mask": batch[1],
                 "labels": batch[3]
             }
+        if head_mask is not None:
+            inputs["head_mask"] = head_mask
 
-            if head_mask is not None:
-                inputs["head_mask"] = head_mask
-
-            # Calculate loss
+        # Calculate loss
+        if GlobalState.debug:
             loss = model(**inputs)[0]
+        else:
+            with torch.cuda.amp.autocast():
+                loss = model(**inputs)[0]
 
-            # Perform backward pass and update weights
-            optimizer.zero_grad()
-            if GlobalState.debug:
-                loss.backward()
+        # Perform backward pass and update weights
+        optimizer.zero_grad()
+        if GlobalState.debug:
+            loss.backward()
+        else:
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        scheduler.step()
+
+        # Save model if this is the best
+        if (iter_i + 1) % min(200, n_iters) == 0:
+            metric_value = evaluate(model, val_loader, metric, is_vis)
+            if best_metric is None or best_metric < metric_value:
+                if verbose:
+                    Logger.info(f"{iter_i:4d}/{n_iters}: Improved to {metric_value:.4f}! Saved.")
+                best_metric = metric_value
+                best_model = deepcopy(model)
+                no_improvement = 0
             else:
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-            scheduler.step()
+                if verbose:
+                    Logger.info(f"{iter_i:4d}/{n_iters}: ({metric_value:.2f})")
+                no_improvement += 1
 
-            # Save model if this is the best
-            iters_done += 1
-            if iters_done % min(200, n_iters) == 0:
-                metric_value = evaluate(model, test_loader, metric)
-                if best_metric is None or best_metric < metric_value:
-                    if verbose:
-                        Logger.info(
-                            f"{iters_done:4d}/{n_iters}: Improved to {metric_value:.2f}! Saved.")
-                    best_metric = metric_value
-                    best_model = deepcopy(model)
-                    no_improvement = 0
-                else:
-                    if verbose:
-                        Logger.info(f"{iters_done:4d}/{n_iters}: ({metric_value:.2f})")
-                    no_improvement += 1
-
-            # Check if training should be finished
-            finished = iters_done >= n_iters or no_improvement >= 10
-            if finished:
-                break
+        # Check if any stopping criterion is met
+        if no_improvement >= 5:
+            break
 
     if verbose:
         Logger.info(f"Best {metric.name}: {best_metric:.2f}")

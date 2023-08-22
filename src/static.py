@@ -2,6 +2,11 @@ import os
 import inspect
 import logging
 
+TASKS = {
+    'nlp': ['cola', 'mnli', 'mnli-mm', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli'],
+    'vis': ['cifar10', 'cifar100', 'pets', 'flowers', 'food', 'dtd', 'aircraft']
+}
+
 
 class CustomLogFormatter(logging.Formatter):
 

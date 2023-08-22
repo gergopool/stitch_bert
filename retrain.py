@@ -43,6 +43,7 @@ def main(args):
                      train_dataset,
                      val_dataset,
                      metric,
+                     is_vis=args.task in TASKS['vis'],
                      n_iters=args.n_iterations,
                      batch_size=args.batch_size,
                      head_mask=head_mask)

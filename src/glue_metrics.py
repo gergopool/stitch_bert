@@ -3,6 +3,7 @@ from abc import ABC
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import matthews_corrcoef
 
+from .static import TASKS
 
 class Metric(ABC):
     name = "Metric"
@@ -46,7 +47,7 @@ def get_metric_for(task_name):
         return MatthewsCorrelation()
     elif task_name == 'sts-b':
         return Correlation()
-    elif task_name in ['mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst-2', 'wnli']:
+    elif task_name in ['mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst-2', 'wnli'] + TASKS['vis']:
         return Accuracy()
     else:
         return NameError(f"Unknown task name: {task_name}")
