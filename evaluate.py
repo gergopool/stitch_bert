@@ -6,20 +6,11 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
 from train import load_datasets
+from src.data import load_data_from_args
 from src.static import Logger, GlobalState, TASKS
-from src.models import build_pretrained_transformer
+from src.models import load_model
 from src.glue_metrics import get_metric_for, Metric
 from src.evaluator import evaluate
-
-
-def load_model(model_root: str, model_type: str, task: str, seed: int,
-               device: torch.device) -> nn.Module:
-    model_path = os.path.join(model_root, f"{task}_{seed}.pt")
-    model = build_pretrained_transformer(model_type, task)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    Logger.info(f"Model loaded from file {model_path}.")
-    model.eval()
-    return model
 
 
 def load_mask(mask_dir: str, task: str, seed: int, device: torch.device) -> torch.Tensor:
@@ -29,39 +20,34 @@ def load_mask(mask_dir: str, task: str, seed: int, device: torch.device) -> torc
     return head_mask
 
 
-def get_model_performance(val_dataset: Dataset,
-                          model: nn.Module,
-                          head_mask: torch.Tensor,
-                          is_vis: bool,
-                          metric: Metric) -> float:
-    data_loader = DataLoader(val_dataset,
-                             batch_size=32,
-                             shuffle=False,
-                             pin_memory=True,
-                             drop_last=False)
-    return evaluate(model, data_loader, metric, is_vis, head_mask)
-
-
 def main(args):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # Initialize the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=False)
-    Logger.info("Tokenizer initialized.")
+    # Load data
+    test_loader = load_data_from_args(args, dev=True)
 
     # Load model and mask
-    model = load_model(args.retrain_dir, args.model_type, args.task, args.seed, device)
+    trained_model = load_model(args.train_dir, args.task, args.seed, device)
+    retrained_model = load_model(args.retrain_dir, args.task, args.seed, device)
     head_mask = load_mask(args.mask_dir, args.task, args.seed, device)
 
-    # Load dataset & metric
-    _, val_dataset = load_datasets(args, tokenizer)
+    # Calculate mask sparstiy
+    mask_sparsity = head_mask.sum().item() / head_mask.numel() * 100
+
+    # Load metric
     metric = get_metric_for(args.task)
 
     # Get benchmark performance
     is_vis = args.task in TASKS['vis']
-    performance = get_model_performance(val_dataset, model, head_mask, is_vis, metric)
-    Logger.info(f"Model metric: {performance:.4f}")
+    full_trained_perf = evaluate(trained_model, test_loader, metric, is_vis, mask=None)
+    masked_trained_perf = evaluate(trained_model, test_loader, metric, is_vis, mask=head_mask)
+    masked_retrained_perf = evaluate(retrained_model, test_loader, metric, is_vis, mask=head_mask)
+
+    Logger.info(f"Mask sparsity                           : {mask_sparsity:.2f}%")
+    Logger.info(f"Original finetuned performance          : {full_trained_perf:.4f}")
+    Logger.info(f"Masked, without re-training performance : {masked_trained_perf:.4f}")
+    Logger.info(f"Masked, with retraining performance     : {masked_retrained_perf:.4f}")
 
 
 def parse_args():
@@ -69,15 +55,14 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     # Define the argparse arguments
-    parser.add_argument(
-        "task",
-        type=str,
-        choices=['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli'],
-        help="Name of the task (dataset).")
+    parser.add_argument("task",
+                        type=str,
+                        choices=TASKS['vis'] + TASKS['nlp'],
+                        help="Name of the task (dataset).")
     parser.add_argument("seed", type=int, help="The seed of the run, for reproducibility.")
     parser.add_argument("--data_dir",
                         type=str,
-                        default='/data/shared/data/glue_data',
+                        default='/data/shared/data',
                         help="Directory where the data is located.")
     parser.add_argument("--model_type",
                         type=str,
@@ -87,9 +72,15 @@ def parse_args():
                         type=int,
                         default=128,
                         help="Maximum sequence length for the tokenized data. Default is 128.")
+    parser.add_argument("--batch_size", type=int, default=128, help="Batch size. Default is 128.")
     parser.add_argument("--overwrite_cache",
                         action='store_true',
                         help="If True, overwrite the cached data. Default is False.")
+    parser.add_argument("--train_dir",
+                        type=str,
+                        default='results/finetune/',
+                        help="Directory which contains the finetuned models. " + \
+                             "Default is 'results/finetune/'.")
     parser.add_argument("--retrain_dir",
                         type=str,
                         default='results/retrained/',

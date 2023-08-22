@@ -3,8 +3,18 @@ import inspect
 import logging
 
 TASKS = {
-    'nlp': ['cola', 'mnli', 'mnli-mm', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli'],
+    'nlp': ['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli'],
     'vis': ['cifar10', 'cifar100', 'pets', 'flowers', 'food', 'dtd', 'aircraft']
+}
+
+N_CLASSES = {
+    'cifar10': 10,
+    'cifar100': 100,
+    'pets': 37,
+    'flowers': 102,
+    'food': 101,
+    'dtd': 47,
+    'aircraft': 100,
 }
 
 

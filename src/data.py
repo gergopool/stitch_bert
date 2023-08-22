@@ -14,13 +14,14 @@ IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
 
 
-def load_data_from_args(args, n_iters: int = None, dev=False) -> DataLoader:
+def load_data_from_args(args, n_iters: int = None, n_points: int = None, dev=False) -> DataLoader:
     """
     Load data from argparse arguments.
 
     Parameters:
     - args: Argparse arguments.
     - n_iters: Number of iterations to run the training loop.
+    - n_points: Limiting the dataset to n_points.
     - dev: Whether to use evaluation data. If False, training data will be used.
 
     Returns:
@@ -36,6 +37,7 @@ def load_data_from_args(args, n_iters: int = None, dev=False) -> DataLoader:
     return load_data(task=task,
                      data_dir=args.data_dir,
                      n_iters=n_iters,
+                     n_points=n_points,
                      batch_size=args.batch_size,
                      overwrite_cache=args.overwrite_cache,
                      max_seq_length=args.max_seq_length,
@@ -44,11 +46,12 @@ def load_data_from_args(args, n_iters: int = None, dev=False) -> DataLoader:
 
 def load_data(task: str,
               data_dir: str,
-              n_iters: int,
-              batch_size: int,
-              overwrite_cache: bool,
-              max_seq_length: int,
-              dev: bool) -> DataLoader:
+              n_iters: int = None,
+              n_points: int = None,
+              batch_size: int = 32,
+              overwrite_cache: bool = False,
+              max_seq_length: int = 128,
+              dev: bool = False) -> DataLoader:
     """
     Load data loader for the given task.
 
@@ -56,6 +59,7 @@ def load_data(task: str,
     - task: Name of the task (e.g. cola, mnist, etc).
     - data_dir: Directory where the data is located.
     - n_iters: Number of iterations to run the training loop.
+    - n_points: Limiting the dataset to n_points.
     - batch_size: Batch size.
     - overwrite_cache: If True, overwrite the cached data.
     - max_seq_length: Maximum sequence length for the tokenized data.
@@ -79,8 +83,10 @@ def load_data(task: str,
 
     if GlobalState.debug:
         batch_size = 4
-        dataset = DebugWrapper(dataset)
+        dataset = LimitedDataWrapper(dataset, n_points=20)
         n_iters = 2
+    elif n_points is not None:
+        dataset = LimitedDataWrapper(dataset, n_points=n_points)
 
     # Define batch sampler for exactly N iterations
     if not dev:
@@ -355,12 +361,12 @@ class CustomBatchSampler(BatchSampler):
         return self.num_of_iterations
 
 
-class DebugWrapper(Dataset):
+class LimitedDataWrapper(Dataset):
 
-    def __init__(self, dataset, debug_size=20):
+    def __init__(self, dataset, n_points=20):
         assert isinstance(dataset, Dataset), "Input dataset must be a subclass of torch.utils.data.Dataset"
         self.dataset = dataset
-        self.debug_size = debug_size
+        self.n_points = n_points
 
     def __getattr__(self, name):
         # Delegate attribute access to the underlying dataset
@@ -370,4 +376,4 @@ class DebugWrapper(Dataset):
         return self.dataset[index]
 
     def __len__(self):
-        return min(self.debug_size, len(self.dataset))
+        return min(self.n_points, len(self.dataset))

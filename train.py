@@ -28,7 +28,7 @@ def main(args):
     train_loader, val_loader = load_datasets(args)
 
     # Initialize the pre-trained transformer
-    model = build_pretrained_transformer(args.task, train_loader.dataset)
+    model = build_pretrained_transformer(args.task)
     Logger.info("Pre-trained transformer initialized.")
 
     # Train the model

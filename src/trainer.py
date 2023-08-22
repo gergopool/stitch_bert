@@ -47,7 +47,7 @@ def train(model: nn.Module,
     model.to(device)
 
     # Initialize training related objects
-    optimizer = torch.optim.AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5, weight_decay=0.001)
     scheduler = get_linear_schedule_with_warmup(optimizer, int(n_iters * 0.1), n_iters)
     if not GlobalState.debug:
         scaler = torch.cuda.amp.GradScaler()
@@ -89,6 +89,7 @@ def train(model: nn.Module,
         optimizer.zero_grad()
         if GlobalState.debug:
             loss.backward()
+            optimizer.step()
         else:
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -100,13 +101,13 @@ def train(model: nn.Module,
             metric_value = evaluate(model, val_loader, metric, is_vis)
             if best_metric is None or best_metric < metric_value:
                 if verbose:
-                    Logger.info(f"{iter_i:4d}/{n_iters}: Improved to {metric_value:.4f}! Saved.")
+                    Logger.info(f"{iter_i+1:4d}/{n_iters}: Improved to {metric_value:.4f}! Saved.")
                 best_metric = metric_value
                 best_model = deepcopy(model)
                 no_improvement = 0
             else:
                 if verbose:
-                    Logger.info(f"{iter_i:4d}/{n_iters}: ({metric_value:.2f})")
+                    Logger.info(f"{iter_i+1:4d}/{n_iters}: ({metric_value:.2f})")
                 no_improvement += 1
 
         # Check if any stopping criterion is met

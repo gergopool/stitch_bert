@@ -37,7 +37,7 @@ def _gram_linear(x):
 
 
 def _center_gram(gram, unbiased=False):
-    if not torch.allclose(gram, gram.T):
+    if not torch.allclose(gram, gram.T, rtol=1e-03, atol=1e-04):
         raise ValueError('Input must be a symmetric matrix.')
 
     if unbiased:

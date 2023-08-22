@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 
+
 def _open_forward_override_hook(model: nn.Module, layer_i: int) -> None:
     """Open a forward hook to load activations."""
     model.cache = None
@@ -11,7 +12,10 @@ def _open_forward_override_hook(model: nn.Module, layer_i: int) -> None:
         model.cache = None
         return (activation,)
 
-    layer = model.bert.encoder.layer[layer_i]
+    if hasattr(model, 'bert'):
+        layer = model.bert.encoder.layer[layer_i]
+    elif hasattr(model, 'vit'):
+        layer = model.vit.encoder.layer[layer_i]
     model.hook = layer.register_forward_hook(override_output)
 
 

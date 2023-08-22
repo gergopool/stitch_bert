@@ -48,8 +48,8 @@ def predict(model: Bert,
                 "token_type_ids": batch[2],
                 "attention_mask": batch[1],
                 "labels": batch[3],
-                "head_mask": mask,
             }
+        inputs['head_mask'] = mask
 
         # Calculate loss
         if GlobalState.debug:

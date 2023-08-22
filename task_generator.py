@@ -17,6 +17,18 @@ CONFIGS = {
     },
     "retrain": {
         "task": TASKS['nlp'] + TASKS['vis'], "seed": [i for i in range(5)]
+    },
+    "compare_in_tasks": {
+        "task1": TASKS['nlp'] + TASKS['vis'],
+        "seed1": [i for i in range(5)],
+        "task2": TASKS['nlp'] + TASKS['vis'],
+        "seed2": [i for i in range(5)],
+    },
+    "compare_across_tasks": {
+        "task1": TASKS['nlp'] + TASKS['vis'],
+        "seed1": [i for i in range(5)],
+        "task2": TASKS['nlp'] + TASKS['vis'],
+        "seed2": [i for i in range(5)],
     }
 }
 
@@ -31,6 +43,22 @@ def mask(task, seed):
 
 def retrain(task, seed):
     return f"python retrain.py {task} {seed}"
+
+
+def compare_in_tasks(task1, seed1, task2, seed2):
+    stop_criteria1 = not (task1 == task2)
+    stop_criteria2 = seed1 == seed2
+    if stop_criteria1 or stop_criteria2:
+        return None
+    return f"python compare.py {task1} {seed1} {task2} {seed2}"
+
+
+def compare_across_tasks(task1, seed1, task2, seed2):
+    stop_criteria1 = not ((task1 in TASKS['vis']) == (task2 in TASKS['vis']))
+    stop_criteria2 = task1 == task2
+    if stop_criteria1 or stop_criteria2:
+        return None
+    return f"python compare.py {task1} {seed1} {task2} {seed2}"
 
 
 def main(args):

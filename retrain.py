@@ -11,6 +11,8 @@ from src.glue_metrics import get_metric_for
 from src.trainer import train
 from train import load_datasets
 
+from src.static import TASKS
+
 
 def main(args):
 
@@ -19,33 +21,26 @@ def main(args):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # Initialize the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=False)
-    Logger.info("Tokenizer initialized.")
-
     # Load the mask
     mask_path = os.path.join(args.mask_dir, f"{args.task}_{args.seed}.pt")
     head_mask = torch.load(mask_path, map_location=device)
     Logger.info(f"Loaded mask from file {mask_path}.")
 
-    # Initialize the pre-trained transformer (original BERT initialization)
-    model = build_pretrained_transformer(args.model_type, args.task)
-    model.to(device)
-    Logger.info("Pre-trained transformer initialized.")
+    # Load data
+    train_loader, val_loader = load_datasets(args)
 
-    # Create dataloader
-    train_dataset, val_dataset = load_datasets(args, tokenizer)
+    # Initialize the pre-trained transformer
+    model = build_pretrained_transformer(args.task).to(device)
+    Logger.info("Pre-trained transformer initialized.")
 
     # Retrain the model
     Logger.info(f"Retraining starts with the applied mask..")
     metric = get_metric_for(args.task)
     model, _ = train(model,
-                     train_dataset,
-                     val_dataset,
+                     train_loader,
+                     val_loader,
                      metric,
                      is_vis=args.task in TASKS['vis'],
-                     n_iters=args.n_iterations,
-                     batch_size=args.batch_size,
                      head_mask=head_mask)
     Logger.info(f"Retraining finished..")
 
@@ -63,20 +58,15 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     # Define the argparse arguments
-    parser.add_argument(
-        "task",
-        type=str,
-        choices=['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli'],
-        help="Name of the task (dataset).")
+    parser.add_argument("task",
+                        type=str,
+                        choices=TASKS['vis'] + TASKS['nlp'],
+                        help="Name of the task (dataset).")
     parser.add_argument("seed", type=int, help="The random seed of the run, for reproducibility.")
     parser.add_argument("--data_dir",
                         type=str,
-                        default='/data/shared/data/glue_data',
+                        default='/data/shared/data',
                         help="Directory where the data is located.")
-    parser.add_argument("--model_type",
-                        type=str,
-                        default='bert-base-uncased',
-                        help="Type of the model. Default is 'bert-base-uncased'.")
     parser.add_argument("--overwrite_cache",
                         action='store_true',
                         help="If True, overwrite the cached data. Default is False.")

@@ -10,19 +10,10 @@ from train import load_datasets
 from src.utils import set_seed
 from src.static import Logger, GlobalState, TASKS
 from src.compare import cka, jaccard_similarity, functional_similarity, calculate_embeddings
-from src.models import build_pretrained_transformer
+from src.models import load_model
 from src.glue_metrics import get_metric_for, Metric
 from src.evaluator import evaluate
-
-
-def load_model(model_root: str, model_type: str, task: str, seed: int,
-               device: torch.device) -> nn.Module:
-    model_path = os.path.join(model_root, f"{task}_{seed}.pt")
-    model = build_pretrained_transformer(model_type, task)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    Logger.info(f"Model loaded from file {model_path}.")
-    model.eval()
-    return model
+from src.data import load_data_from_args
 
 
 def load_mask(mask_dir: str, task: str, seed: int, device: torch.device) -> torch.Tensor:
@@ -32,15 +23,6 @@ def load_mask(mask_dir: str, task: str, seed: int, device: torch.device) -> torc
     return head_mask
 
 
-def get_model_performance(val_dataset: Dataset, model_info: dict, is_vis:bool, metric: Metric) -> float:
-    data_loader = DataLoader(val_dataset,
-                             batch_size=32,
-                             shuffle=False,
-                             pin_memory=True,
-                             drop_last=False)
-    return evaluate(model_info['model2'], data_loader, metric, is_vis, model_info['mask2'])
-
-
 def main(args):
 
     # Set the random seed for reproducibility
@@ -48,25 +30,26 @@ def main(args):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # Initialize the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=False)
-    Logger.info("Tokenizer initialized.")
+    # Load dataloaders
+    train_loader = load_data_from_args(args, n_iters=args.n_iterations, dev=False)
+    val_loader = load_data_from_args(args, dev=True)
+    Logger.info(f"Training dataset is loaded with {len(train_loader.dataset)} datapoints.")
+    Logger.info(f"Validation dataset is loaded with {len(val_loader.dataset)} datapoints.")
 
     # Load masks, models and metric
     model_info = {
-        "model1": load_model(args.retrain_dir, args.model_type, args.task1, args.seed1, device),
-        "model2": load_model(args.retrain_dir, args.model_type, args.task2, args.seed2, device),
+        "model1": load_model(args.retrain_dir, args.task1, args.seed1, device),
+        "model2": load_model(args.retrain_dir, args.task2, args.seed2, device),
         "mask1": load_mask(args.mask_dir, args.task1, args.seed1, device),
         "mask2": load_mask(args.mask_dir, args.task2, args.seed2, device)
     }
 
     # Load datasets & metric
-    train_dataset, val_dataset = load_datasets(args, tokenizer)
     metric = get_metric_for(args.task2)
 
     # Get benchmark performance
     is_vis = args.task2 in TASKS['vis']
-    model2_performance = get_model_performance(val_dataset, model_info, is_vis, metric)
+    model2_performance = evaluate(model_info['model2'], val_loader, metric, is_vis, mask=None)
     Logger.info(f"Model2 metric: {model2_performance:.4f}")
 
     # Dictionary used to store results for jaccard, cka, and functional similarity
@@ -85,10 +68,12 @@ def main(args):
         # Calculate embeddings first for both CKA and pseudo-inverse init
         embeddings = calculate_embeddings(**model_info,
                                           layer_i=layer_i,
-                                          dataset=train_dataset,
+                                          data_loader=val_loader,
                                           n_points=args.n_points,
-                                          batch_size=args.batch_size,
+                                          is_vis=is_vis,
                                           device=device)
+        Logger.info(f"{len(embeddings['x1'])} embeddings calculated for layer {layer_i+1}.")
+
         # CKA
         current_cka = cka(**embeddings)
         results['cka'].append(current_cka)
@@ -98,12 +83,11 @@ def main(args):
         current_fs = functional_similarity(**model_info,
                                            layer_i=layer_i,
                                            embeddings=embeddings,
-                                           train_dataset=train_dataset,
-                                           val_dataset=val_dataset,
+                                           train_loader=train_loader,
+                                           val_loader=val_loader,
                                            model2_performance=model2_performance,
                                            metric=metric,
-                                           n_iters=args.n_iterations,
-                                           batch_size=args.batch_size,
+                                           is_vis=is_vis,
                                            device=device)
         results['fs'].append(current_fs)
         Logger.info(f"FS @ {layer_i+1}/{n_layers}      : {current_fs:.3f}.")
@@ -127,24 +111,18 @@ def parse_args():
     # Define the argparse arguments
     parser.add_argument("task1",
                         type=str,
-                        choices=['cola', 'mnli', 'mrpc', 'qnli', \
-                                 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli'],
+                        choices=TASKS['vis'] + TASKS['nlp'],
                         help="Name of the task (dataset).")
     parser.add_argument("seed1", type=int, help="The seed of the first run, for reproducibility.")
     parser.add_argument("task2",
                         type=str,
-                        choices=['cola', 'mnli', 'mrpc', 'qnli', \
-                                 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli'],
+                        choices=TASKS['vis'] + TASKS['nlp'],
                         help="Name of the task (dataset).")
     parser.add_argument("seed2", type=int, help="The seed of the second run, for reproducibility.")
     parser.add_argument("--data_dir",
                         type=str,
-                        default='/data/shared/data/glue_data',
+                        default='/data/shared/data/',
                         help="Directory where the data is located.")
-    parser.add_argument("--model_type",
-                        type=str,
-                        default='bert-base-uncased',
-                        help="Type of the model. Default is 'bert-base-uncased'.")
     parser.add_argument("--max_seq_length",
                         type=int,
                         default=128,
@@ -155,7 +133,7 @@ def parse_args():
                         help="Number of training iterations. Default is 200.")
     parser.add_argument("--n_points",
                         type=int,
-                        default=10000,
+                        default=1000,
                         help="Number datapoints to take for cka and ps_inv. Default is 10000.")
     parser.add_argument("--batch_size",
                         type=int,
