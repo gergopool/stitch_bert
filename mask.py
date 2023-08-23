@@ -7,12 +7,16 @@ from torch.utils.data import DataLoader
 from src import Logger, GlobalState
 from src.data import load_data_from_args
 from src.models import load_model
-from src.glue_metrics import get_metric_for
+from src.metrics import get_metric_for
 from src.mask_utils import mask_heads
 from src.static import TASKS
 
 
 def main(args):
+
+    # Initialize logging and debug mode
+    GlobalState.debug = args.debug
+    Logger.initialise(args.debug)
 
     # Load data
     test_loader = load_data_from_args(args, dev=True)
@@ -39,7 +43,7 @@ def main(args):
         Logger.info(f"Mask is not saved in debug mode.")
 
 
-def parse_args():
+def parse_args(cli_args=None):
 
     parser = argparse.ArgumentParser()
 
@@ -88,7 +92,7 @@ def parse_args():
     parser.add_argument("--debug", action='store_true', help="Run in debug mode. Default is False.")
 
     # Parse the arguments
-    args = parser.parse_args()
+    args = parser.parse_args(cli_args)
 
     return args
 
@@ -96,10 +100,6 @@ def parse_args():
 if __name__ == "__main__":
     # Parse the command line arguments
     args = parse_args()
-
-    # Initialize logging and debug mode
-    GlobalState.debug = args.debug
-    Logger.initialise(args.debug)
 
     # Execute the main function
     main(args)

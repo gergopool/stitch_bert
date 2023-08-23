@@ -7,7 +7,7 @@ from transformers import AutoTokenizer
 from src import Logger, GlobalState
 from src.models import build_pretrained_transformer
 from src.utils import set_seed
-from src.glue_metrics import get_metric_for
+from src.metrics import get_metric_for
 from src.trainer import train
 from train import load_datasets
 
@@ -15,6 +15,10 @@ from src.static import TASKS
 
 
 def main(args):
+
+    # Initialize logging and debug mode
+    GlobalState.debug = args.debug
+    Logger.initialise(args.debug)
 
     # Set the random seed for reproducibility
     set_seed(args.seed)
@@ -54,7 +58,7 @@ def main(args):
         Logger.info(f"Retrained model not saved due to debug mode.")
 
 
-def parse_args():
+def parse_args(cli_args=None):
     parser = argparse.ArgumentParser()
 
     # Define the argparse arguments
@@ -94,7 +98,7 @@ def parse_args():
     parser.add_argument("--debug", action='store_true', help="Run in debug mode. Default is False.")
 
     # Parse the arguments
-    args = parser.parse_args()
+    args = parser.parse_args(cli_args)
 
     return args
 
@@ -102,10 +106,6 @@ def parse_args():
 if __name__ == "__main__":
     # Parse the command line arguments
     args = parse_args()
-
-    # Initialize logging and debug mode
-    GlobalState.debug = args.debug
-    Logger.initialise(args.debug)
 
     # Execute the main function
     main(args)

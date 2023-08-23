@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from .glue_metrics import Metric
+from .metrics import Metric
 from torch.utils.data import DataLoader
 from transformers import BertForSequenceClassification as Bert
 from typing import Tuple
@@ -10,7 +10,7 @@ from .static import GlobalState
 
 def predict(model: Bert,
             data_loader: DataLoader,
-            mask: torch.tensor = None,
+            mask: torch.Tensor = None,
             is_vis: bool = False) -> Tuple[np.array, np.array]:
     """
     Run the model on the data loader and return the predictions and labels.
@@ -29,7 +29,7 @@ def predict(model: Bert,
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Set model trainable
-    trainable_was = model.training
+    was_model_trainable = model.training
     model.eval().to(device)
 
     # Prepare mask
@@ -64,7 +64,7 @@ def predict(model: Bert,
         preds.append(outputs[1].cpu().detach())
         labels.append(inputs['labels'].cpu().detach())
 
-        # Quick after three iterations in debug mode
+        # Quit after three iterations in debug mode
         if GlobalState.debug and iter_i >= 2:
             break
 
@@ -73,7 +73,7 @@ def predict(model: Bert,
     labels = torch.cat(labels, dim=0).numpy()
 
     # Set model back to trainable
-    model.train(trainable_was)
+    model.train(was_model_trainable)
 
     return preds, labels
 

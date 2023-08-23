@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 
 from src.evaluator import evaluate
 from .static import GlobalState, Logger
-from .glue_metrics import Metric
+from .metrics import Metric
 
 
 def train(model: nn.Module,
@@ -17,7 +17,11 @@ def train(model: nn.Module,
           head_mask: torch.Tensor = None,
           force_eval_mode: bool = False,
           is_vis: bool = False,
-          verbose: bool = True) -> nn.Module:
+          verbose: bool = True,
+          lr: float = 1e-5,
+          weight_decay: float = 0.001,
+          warmup_fraction: float = 0.1,
+          early_stopping_patience: int = 5) -> nn.Module:
     """
     Train a given model on a given train dataset for a specified number of iterations and batch size.
     Return with the best model based on the validation metric.
@@ -31,16 +35,18 @@ def train(model: nn.Module,
         force_eval_mode: If True, the model will be set to eval mode during training.
         is_vis: If True, we assume it is a vision task.
         verbose: If True, the training progress will be printed.
+        lr: Learning rate for the optimizer.
+        weight_decay: Weight decay for the optimizer.
+        warmup_fraction: Fraction of iterations for learning rate warmup.
+        early_stopping_patience: Number of iterations without improvement before stopping.
     Returns:
         The trained model.
     """
     n_iters = len(train_loader)
-
-    # Get device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # Set model to trainable
-    was_trainable = model.training
+    # Preserve original training state
+    was_model_trainable = model.training
 
     if not force_eval_mode:
         model.train()
@@ -119,6 +125,6 @@ def train(model: nn.Module,
 
     # Restore the original training state of the model
     model = best_model
-    model.train(was_trainable)
+    model.train(was_model_trainable)
 
     return model, best_metric

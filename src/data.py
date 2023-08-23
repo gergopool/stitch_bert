@@ -110,7 +110,7 @@ def load_data(task: str,
     return data_loader
 
 
-def load_vision_data(data_dir: str, task: str, dev: bool = False):
+def load_vision_data(data_dir: str, task: str, dev: bool = False) -> Dataset:
     """
     Load and cache examples from vision dataset.
 
@@ -119,6 +119,8 @@ def load_vision_data(data_dir: str, task: str, dev: bool = False):
     - task: Name of the task (dataset).
     - dev: Whether to use evaluation data. If False, training data will be used.
     """
+    if task not in TASKS['vis']:
+        raise ValueError(f"Task {task} not found in {TASKS['vis']}")
 
     if dev:
         transform = transforms.Compose([

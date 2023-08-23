@@ -1,10 +1,13 @@
+"""
+This script generates tasks for the experiments.
+The script generates a bash prompt for each task that needs to be run,
+without the specification of which GPU to use. Then, another script
+processes the bash prompts and distributes and runs the tasks on the GPUs.
+"""
+
 import argparse
-import glob
 import itertools
-import json
 import os
-import sys
-from pathlib import Path
 
 from src import TASKS
 
@@ -29,34 +32,43 @@ CONFIGS = {
         "seed1": [i for i in range(5)],
         "task2": TASKS['nlp'] + TASKS['vis'],
         "seed2": [i for i in range(5)],
+    },
+    "evaluate": {
+        "task1": TASKS['nlp'] + TASKS['vis'],
+        "seed1": [i for i in range(5)],
     }
 }
 
 
-def train(task, seed):
+def train(task: str, seed: int) -> str:
     return f"python train.py {task} {seed}"
 
 
-def mask(task, seed):
+def mask(task: str, seed) -> str:
     return f"python mask.py {task} {seed}"
 
 
-def retrain(task, seed):
+def retrain(task: str, seed) -> str:
     return f"python retrain.py {task} {seed}"
 
 
-def compare_in_tasks(task1, seed1, task2, seed2):
+def evaluate(task: str, seed) -> str:
+    return f"python evaluate.py {task} {seed}"
+
+
+def compare_in_tasks(task1: str, seed1: int, task2: str, seed2: int) -> str:
     stop_criteria1 = not (task1 == task2)
-    stop_criteria2 = seed1 == seed2
+    stop_criteria2 = ((seed1 + 1) % 5) != (seed2 % 5)
     if stop_criteria1 or stop_criteria2:
         return None
     return f"python compare.py {task1} {seed1} {task2} {seed2}"
 
 
-def compare_across_tasks(task1, seed1, task2, seed2):
+def compare_across_tasks(task1: str, seed1: int, task2: str, seed2: int) -> str:
     stop_criteria1 = not ((task1 in TASKS['vis']) == (task2 in TASKS['vis']))
     stop_criteria2 = task1 == task2
-    if stop_criteria1 or stop_criteria2:
+    stop_criteria3 = (seed1 != 0) or (seed2 != 0)
+    if stop_criteria1 or stop_criteria2 or stop_criteria3:
         return None
     return f"python compare.py {task1} {seed1} {task2} {seed2}"
 

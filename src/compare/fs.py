@@ -5,7 +5,7 @@ from typing import Dict
 
 from .hooks import _open_forward_override_hook, _close_forward_override_hook
 from ..trainer import train
-from ..glue_metrics import Metric
+from ..metrics import Metric
 from ..static import Logger
 
 
@@ -21,6 +21,23 @@ def functional_similarity(model1: nn.Module,
                           metric: Metric,
                           is_vis: bool,
                           device: torch.device) -> float:
+    """
+    Calculate the functional similarity between two models by stitching them together.
+
+    Parameters:
+    - model1, model2: The models to be stitched.
+    - mask1, mask2: Masks to be applied to the models.
+    - layer_i: Index of the layer for stitching.
+    - embeddings: Embeddings for initializing the least squares method.
+    - train_loader, val_loader: Data loaders for training and validation.
+    - model2_performance: Original performance of model2 (must be non-zero).
+    - metric: Metric for evaluation.
+    - is_vis: Flag indicating whether it's a visual task.
+    - device: Device to move the models and data to.
+
+    Returns:
+    - The functional similarity as a float value.
+    """
 
     assert model2_performance != 0, "Original performance cannot be zero."
 
@@ -47,6 +64,14 @@ def functional_similarity(model1: nn.Module,
 
 
 class StitchNet(nn.Module):
+    """
+    Stitched Network class to combine two models with specified masks and layer index.
+
+    Methods:
+    - set_least_squares_init: Initialize the transformation with least squares method.
+    - forward: Forward pass through the stitched model.
+    - close: Close hooks on the stitched model.
+    """
 
     def __init__(self,
                  model1: nn.Module,
@@ -72,10 +97,12 @@ class StitchNet(nn.Module):
         self._setup_hooks()
 
     def set_least_squares_init(self, x1: torch.Tensor, x2: torch.Tensor) -> None:
+        """Initialize the transformation weight with the pseudo inverse of the given tensors."""
         with torch.no_grad():
             self.transform.weight.data = self._pseudo_inverse(x1, x2)
 
-    def forward(self, **kwargs):
+    def forward(self, **kwargs) -> Dict[str, torch.Tensor]:
+        """Forward pass through the stitched model."""
 
         # Calculate activations for model1
         with torch.no_grad():
@@ -123,6 +150,7 @@ class StitchNet(nn.Module):
             param.requires_grad = False
 
     def _pseudo_inverse(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
+        """Calculate the pseudo-inverse of the given tensors."""
 
         x1 = x1.reshape(-1, x1.shape[-1])
         x2 = x2.reshape(-1, x2.shape[-1])
