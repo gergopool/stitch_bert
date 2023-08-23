@@ -10,6 +10,9 @@ def jaccard_similarity(mask1: torch.Tensor, mask2: torch.Tensor) -> float:
     :return: The Jaccard similarity between the two masks, ranging from 0 to 1.
     """
 
+    # Check that the masks have the same shape
+    assert mask1.shape == mask2.shape, "Masks must have the same shape."
+
     mask1 = mask1.bool()
     mask2 = mask2.bool()
 

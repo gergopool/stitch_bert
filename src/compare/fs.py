@@ -1,12 +1,11 @@
 import torch
 from torch import nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from typing import Dict
 
 from .hooks import _open_forward_override_hook, _close_forward_override_hook
 from ..trainer import train
-from ..evaluator import evaluate
-from ..glue_metrics import Metric
+from ..metrics import Metric
 from ..static import Logger
 
 
@@ -16,13 +15,29 @@ def functional_similarity(model1: nn.Module,
                           mask2: torch.Tensor,
                           layer_i: int,
                           embeddings: Dict[str, torch.Tensor],
-                          train_dataset: Dataset,
-                          val_dataset: Dataset,
+                          train_loader: DataLoader,
+                          val_loader: DataLoader,
                           model2_performance: float,
                           metric: Metric,
-                          n_iters: int,
-                          batch_size: int,
+                          is_vis: bool,
                           device: torch.device) -> float:
+    """
+    Calculate the functional similarity between two models by stitching them together.
+
+    Parameters:
+    - model1, model2: The models to be stitched.
+    - mask1, mask2: Masks to be applied to the models.
+    - layer_i: Index of the layer for stitching.
+    - embeddings: Embeddings for initializing the least squares method.
+    - train_loader, val_loader: Data loaders for training and validation.
+    - model2_performance: Original performance of model2 (must be non-zero).
+    - metric: Metric for evaluation.
+    - is_vis: Flag indicating whether it's a visual task.
+    - device: Device to move the models and data to.
+
+    Returns:
+    - The functional similarity as a float value.
+    """
 
     assert model2_performance != 0, "Original performance cannot be zero."
 
@@ -32,13 +47,12 @@ def functional_similarity(model1: nn.Module,
 
     # Train stitched model
     _, best_performance = train(stitch_net,
-                           train_dataset,
-                           val_dataset,
+                           train_loader,
+                           val_loader,
                            metric,
-                           n_iters,
-                           batch_size,
                            head_mask=None,
                            force_eval_mode=True,
+                           is_vis=is_vis,
                            verbose=True)
 
     # Close hooks on stitched model
@@ -50,6 +64,14 @@ def functional_similarity(model1: nn.Module,
 
 
 class StitchNet(nn.Module):
+    """
+    Stitched Network class to combine two models with specified masks and layer index.
+
+    Methods:
+    - set_least_squares_init: Initialize the transformation with least squares method.
+    - forward: Forward pass through the stitched model.
+    - close: Close hooks on the stitched model.
+    """
 
     def __init__(self,
                  model1: nn.Module,
@@ -75,17 +97,24 @@ class StitchNet(nn.Module):
         self._setup_hooks()
 
     def set_least_squares_init(self, x1: torch.Tensor, x2: torch.Tensor) -> None:
+        """Initialize the transformation weight with the pseudo inverse of the given tensors."""
         with torch.no_grad():
             self.transform.weight.data = self._pseudo_inverse(x1, x2)
 
-    def forward(self, *args, **kwargs):
+    def forward(self, **kwargs) -> Dict[str, torch.Tensor]:
+        """Forward pass through the stitched model."""
 
         # Calculate activations for model1
         with torch.no_grad():
-            outputs = self.model1(kwargs['input_ids'],
-                                  attention_mask=kwargs['attention_mask'],
-                                  head_mask=self.mask1,
-                                  output_hidden_states=True)
+            if 'input_ids' in kwargs:
+                outputs = self.model1(kwargs['input_ids'],
+                                      attention_mask=kwargs['attention_mask'],
+                                      head_mask=self.mask1,
+                                      output_hidden_states=True)
+            else:
+                outputs = self.model1(kwargs['pixel_values'],
+                                      head_mask=self.mask1,
+                                      output_hidden_states=True)
 
         # Load and transform activations
         act = outputs['hidden_states'][self.layer_idx + 1].detach()
@@ -95,10 +124,15 @@ class StitchNet(nn.Module):
         self.model2.cache = act
 
         # Run model2
-        outputs = self.model2(kwargs['input_ids'],
-                              attention_mask=kwargs['attention_mask'],
-                              labels=kwargs['labels'],
-                              head_mask=self.mask2)
+        if 'input_ids' in kwargs:
+            outputs = self.model2(kwargs['input_ids'],
+                                  attention_mask=kwargs['attention_mask'],
+                                  labels=kwargs['labels'],
+                                  head_mask=self.mask2)
+        else:
+            outputs = self.model2(kwargs['pixel_values'],
+                                  labels=kwargs['labels'],
+                                  head_mask=self.mask2)
 
         return outputs
 
@@ -116,6 +150,7 @@ class StitchNet(nn.Module):
             param.requires_grad = False
 
     def _pseudo_inverse(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
+        """Calculate the pseudo-inverse of the given tensors."""
 
         x1 = x1.reshape(-1, x1.shape[-1])
         x2 = x2.reshape(-1, x2.shape[-1])
