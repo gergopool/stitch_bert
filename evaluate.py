@@ -1,6 +1,7 @@
 import argparse
 import torch
 import os
+import pickle
 
 from src.data import load_data_from_args
 from src.static import Logger, GlobalState, TASKS
@@ -32,22 +33,30 @@ def main(args):
     retrained_model = load_model(args.retrain_dir, args.task, args.seed, device)
     head_mask = load_mask(args.mask_dir, args.task, args.seed, device)
 
-    # Calculate mask sparstiy
-    mask_sparsity = head_mask.sum().item() / head_mask.numel() * 100
-
     # Load metric
     metric = get_metric_for(args.task)
 
     # Get benchmark performance
     is_vis = args.task in TASKS['vis']
-    full_trained_perf = evaluate(trained_model, test_loader, metric, is_vis, mask=None)
-    masked_trained_perf = evaluate(trained_model, test_loader, metric, is_vis, mask=head_mask)
-    masked_retrained_perf = evaluate(retrained_model, test_loader, metric, is_vis, mask=head_mask)
+    results = {}
+    results['mask_sparsity'] = head_mask.sum().item() / head_mask.numel()
+    results['orig'] = evaluate(trained_model, test_loader, metric, is_vis, mask=None)
+    results['masked'] = evaluate(trained_model, test_loader, metric, is_vis, mask=head_mask)
+    results['retrained'] = evaluate(retrained_model, test_loader, metric, is_vis, mask=head_mask)
 
-    Logger.info(f"Mask sparsity                           : {mask_sparsity:.2f}%")
-    Logger.info(f"Original finetuned performance          : {full_trained_perf:.4f}")
-    Logger.info(f"Masked, without re-training performance : {masked_trained_perf:.4f}")
-    Logger.info(f"Masked, with retraining performance     : {masked_retrained_perf:.4f}")
+    Logger.info(f"Mask sparsity                           : {results['mask_sparsity']*100:.2f}%")
+    Logger.info(f"Original finetuned performance          : {results['orig']:.4f}")
+    Logger.info(f"Masked, without re-training performance : {results['masked']:.4f}")
+    Logger.info(f"Masked, with retraining performance     : {results['retrained']:.4f}")
+
+    if not GlobalState.debug:
+        save_path = os.path.join(args.out_dir, f"{args.task}_{args.seed}.pkl")
+        os.makedirs(args.out_dir, exist_ok=True)
+        with open(save_path, 'wb') as f:
+            pickle.dump(results, f)
+        Logger.info(f"Results saved to {save_path}")
+    else:
+        Logger.info(f"Results not saved due to debug mode.")
 
 
 def parse_args(cli_args=None):
@@ -86,6 +95,10 @@ def parse_args(cli_args=None):
                         default='results/retrained/',
                         help="Directory which contains the retrained models. " + \
                              "Default is 'results/retrained/'.")
+    parser.add_argument("--out_dir",
+                        type=str,
+                        default='results/evaluate/',
+                        help="Directory to save the output. Default is './results/evaluate'.")
     parser.add_argument("--mask_dir",
                         type=str,
                         default='results/masks/',

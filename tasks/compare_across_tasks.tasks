@@ -108,3 +108,7 @@ python compare.py dtd 0 food 0
 python compare.py dtd 0 aircraft 0
 python compare.py aircraft 0 cifar10 0
 python compare.py aircraft 0 cifar100 0
+python compare.py aircraft 0 pets 0
+python compare.py aircraft 0 flowers 0
+python compare.py aircraft 0 food 0
+python compare.py aircraft 0 dtd 0

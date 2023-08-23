@@ -6,6 +6,7 @@ from train import parse_args as train_parse_args, main as train_main
 from mask import parse_args as mask_parse_args, main as mask_main
 from retrain import parse_args as retrain_parse_args, main as retrain_main
 from compare import parse_args as comapre_parse_args, main as compare_main
+from evaluate import parse_args as evaluate_parse_args, main as evaluate_main
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -73,3 +74,14 @@ def test_compare_nlp_debug():
     cli_args = ['cola', '1', 'wnli', '4', '--debug']
     args = comapre_parse_args(cli_args)
     compare_main(args)
+
+def test_evaluate_vis_debug():
+    cli_args = ['pets', '0', '--debug']
+    args = evaluate_parse_args(cli_args)
+    evaluate_main(args)
+
+
+def test_evaluate_nlp_debug():
+    cli_args = ['qqp', '1', '--debug']
+    args = evaluate_parse_args(cli_args)
+    evaluate_main(args)

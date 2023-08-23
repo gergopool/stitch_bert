@@ -34,8 +34,8 @@ CONFIGS = {
         "seed2": [i for i in range(5)],
     },
     "evaluate": {
-        "task1": TASKS['nlp'] + TASKS['vis'],
-        "seed1": [i for i in range(5)],
+        "task": TASKS['nlp'] + TASKS['vis'],
+        "seed": [i for i in range(5)],
     }
 }
 

@@ -53,8 +53,8 @@ def train(model: nn.Module,
     model.to(device)
 
     # Initialize training related objects
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5, weight_decay=0.001)
-    scheduler = get_linear_schedule_with_warmup(optimizer, int(n_iters * 0.1), n_iters)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = get_linear_schedule_with_warmup(optimizer, int(n_iters * warmup_fraction), n_iters)
     if not GlobalState.debug:
         scaler = torch.cuda.amp.GradScaler()
 
@@ -117,7 +117,7 @@ def train(model: nn.Module,
                 no_improvement += 1
 
         # Check if any stopping criterion is met
-        if no_improvement >= 5:
+        if no_improvement >= early_stopping_patience:
             break
 
     if verbose:

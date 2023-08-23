@@ -83,7 +83,7 @@ def parse_args(cli_args=None):
     parser.add_argument("--out_dir",
                         type=str,
                         default='results/finetune/',
-                        help="Directory to save the output. Default is './output'.")
+                        help="Directory to save the output. Default is './results/finetune'.")
     parser.add_argument("--debug", action='store_true', help="Run in debug mode. Default is False.")
 
     # Parse the arguments
