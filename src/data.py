@@ -285,9 +285,9 @@ def preprocess_wikipedia(data_dir: str, tokenizer: AutoTokenizer, max_seq_length
             # split seperately for every language
             train, val, test = split_data(examples, n_train_sample_lang, n_eval_sample_lang, n_test_sample_lang)
 
-            print(f'{language} training data size {len(train)}') 
-            print(f'{language} validation data size {len(val)}') 
-            print(f'{language} test data size {len(test)}') 
+            Logger.info(f'{language} training data size {len(train)}') 
+            Logger.info(f'{language} validation data size {len(val)}') 
+            Logger.info(f'{language} test data size {len(test)}') 
 
             train_all_languages.extend(train)
             val_all_languages.extend(val)
