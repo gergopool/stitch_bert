@@ -44,12 +44,12 @@ def predict(model: Bert,
                 "input_ids": batch[0],
                 "token_type_ids": batch[2],
                 "attention_mask": batch[1],
-                "labels": batch[3],
-                "head_mask": mask,
+                "labels": batch[3]
+
             }
         else:
             inputs = {key: value.to(device) for key, value in batch.items()}
-
+        inputs['head_mask'] = mask
         # Calculate loss
         with torch.no_grad():
             with torch.cuda.amp.autocast(dtype=torch.float16):

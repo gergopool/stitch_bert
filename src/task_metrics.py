@@ -49,7 +49,7 @@ class Perplexity:
         loss_fct = nn.CrossEntropyLoss()
         eval_loss = loss_fct(torch.permute(torch.tensor(y_pred), dims=(0,2,1)), torch.tensor(y_true))
         perplexity = torch.exp(eval_loss)
-        return -perplexity
+        return -perplexity.item()
 
 def get_metric_for(task_name):
 

@@ -7,9 +7,14 @@ import json
 import pickle
 import random
 from . import Logger
-from . import TRAINING_SAMPLES, VALIDATION_SAMPLES, TEST_SAMPLES, LANGUAGES
 import torch.utils.data as data
 from torch.utils.data import TensorDataset
+
+WIKI_TRAINING_SAMPLES = 1e5
+WIKI_VALIDATION_SAMPLES = 1e4
+WIKI_TEST_SAMPLES = 1e4
+
+LANGUAGES = ['es']#['en', 'de', 'fr', 'es', 'zh']
 
 class MLM_Dataset(data.Dataset):
     "PyTorch Dataset class for Masked Language Model (MLM) data."
@@ -147,7 +152,7 @@ def load_glue_data(data_dir: str,
                                dev)
 
     # Convert to Tensors and build dataset
-    return build_dataset(features, task)
+    return build_glue_dataset(features, task)
 
 
 def split_data(dataset, train_sample_lang: int = 0, eval_sample_lang: int = 0, test_sample_lang: int = 0):
@@ -255,9 +260,9 @@ def preprocess_wikipedia(data_dir: str, tokenizer: AutoTokenizer, max_seq_length
 
     # number of samples per language. Assume we want equal amount of data for every language.
     langs = LANGUAGES
-    n_train_sample_lang = int(TRAINING_SAMPLES / len(langs))
-    n_eval_sample_lang =  int(VALIDATION_SAMPLES / len(langs))
-    n_test_sample_lang =  int(TEST_SAMPLES / len(langs))
+    n_train_sample_lang = int(WIKI_TRAINING_SAMPLES / len(langs))
+    n_eval_sample_lang =  int(WIKI_VALIDATION_SAMPLES / len(langs))
+    n_test_sample_lang =  int(WIKI_TEST_SAMPLES / len(langs))
                                                                    
     for language in langs:
         path = os.path.join(data_dir, f'{language}.data.json', 'AA', f"wiki_00")
