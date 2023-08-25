@@ -72,12 +72,11 @@ def load_data_from_args(args, tokenizer, dev=False):
                           max_seq_length=args.max_seq_length)
 
 def load_mlm_data(data_dir: str,
-                   task: str,
-                   tokenizer: AutoTokenizer,
-                   dev: bool = False,
-                   overwrite_cache: bool = False,
-                   max_seq_length: int = 128,
-                   ):
+                  task: str,
+                  tokenizer: AutoTokenizer,
+                  dev: bool = False,
+                  overwrite_cache: bool = False,
+                  max_seq_length: int = 128):
     """
     Load masked language model (MLM) data.
 
