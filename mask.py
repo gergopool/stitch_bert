@@ -77,7 +77,7 @@ def parse_args():
     parser.add_argument("--model_type",
                         type=str,
                         default='bert-base-uncased',
-                        help="Type of the model. Default is 'bert-base-uncased'. Use xlm-roberta-base for MLM task")
+                        help="Type of the model. Default is 'bert-base-uncased'.")
     parser.add_argument("--stop_threshold",
                         type=float,
                         default=0.9,

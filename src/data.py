@@ -3,18 +3,14 @@ import torch
 from torch.utils.data import TensorDataset
 from transformers import glue_processors, glue_output_modes, glue_convert_examples_to_features
 from transformers import AutoTokenizer
-import json
-import pickle
-import random
+from datasets import load_dataset
 from . import Logger
 import torch.utils.data as data
 from torch.utils.data import TensorDataset
 
-WIKI_TRAINING_SAMPLES = 1e5
-WIKI_VALIDATION_SAMPLES = 1e4
-WIKI_TEST_SAMPLES = 1e4
-
-LANGUAGES = ['es']#['en', 'de', 'fr', 'es', 'zh']
+WIKI_TRAINING_SAMPLES = 1_000_000
+WIKI_VALIDATION_SAMPLES = 10_000
+WIKI_TEST_SAMPLES = 10_000
 
 class MLM_Dataset(data.Dataset):
     "PyTorch Dataset class for Masked Language Model (MLM) data."
@@ -155,49 +151,30 @@ def load_glue_data(data_dir: str,
     return build_glue_dataset(features, task)
 
 
-def split_data(dataset, train_sample_lang: int = 0, eval_sample_lang: int = 0, test_sample_lang: int = 0):
+def split_data(dataset, mode):
     """
-    Shuffle and then split the dataset into train, validation, and test sets.
+    Split the dataset into train, validation, and test sets.
 
     Parameters:
     - dataset: List of strings representing sentences.
-    - train_sample_lang: int, number of samples to take from the training set. If set to 0, take all training examples.
-    - eval_sample_lang: int, number of samples to take from the validation set. If set to 0, take all validation examples.
-    - test_sample_lang: int, number of samples to take from the test set. If set to 0, take all test examples.
+    - mode: train, dev or test for 
 
     Returns:
-    - all_splits: List containing train, validation, and test splits.
+    - sampler (Subset): Sampler for the training set.
     """
  
     dataset_length = len(dataset)
-    random.seed(0)
-    random.shuffle(dataset)
 
-    # Divide the data into three sets
-    train_size = int(dataset_length * 0.8)
-    val_size = int(dataset_length * 0.1)
-
-    all_splits = []
-    for split in ['train','validation','test']:
-        if split == 'train':
-            start, end = 0, train_size
-            sample_n = train_sample_lang
-        elif split == 'validation':
-            start, end = train_size, train_size + val_size
-            sample_n = eval_sample_lang 
-        elif split == 'test':
-            start, end = train_size + val_size, dataset_length
-            sample_n = test_sample_lang
-
-        split_list = dataset[start:end]
-
-        # take samples from split
-        if sample_n != 0:
-            split_list = split_list[:sample_n]
-
-        all_splits.append(split_list)
-
-    return all_splits
+    indices = list(range(dataset_length))
+    if mode == 'train':
+        split_indices = indices[:WIKI_TRAINING_SAMPLES]
+    elif mode=='dev':
+        split_indices = indices[WIKI_TRAINING_SAMPLES:WIKI_TRAINING_SAMPLES+WIKI_VALIDATION_SAMPLES]
+    elif mode=='test':
+        split_indices = indices[WIKI_TRAINING_SAMPLES+WIKI_VALIDATION_SAMPLES:WIKI_TRAINING_SAMPLES+WIKI_VALIDATION_SAMPLES+WIKI_TEST_SAMPLES]
+    
+    sampler = dataset.select(split_indices)
+    return sampler
 
 def load_glue_from_cache(cached_features_file: str,
                     overwrite_cache: bool,
@@ -239,67 +216,6 @@ def load_glue_from_cache(cached_features_file: str,
 
     return features
 
-def preprocess_wikipedia(data_dir: str, tokenizer: AutoTokenizer, max_seq_length = 128):
-    """
-    Load and tokenize Wikipedia data. We take as many samples they are defined in the __init__.py file
-    I take the same amount of data for every language
-
-    Parameters:
-    - data_dir: Directory path where the data is stored.
-    - tokenizer: Tokenizer used to tokenize the text.
-    - max_seq_length: Maximum sequence length for tokenization. Default is 128.
-
-    Returns:
-    - train_all_languages: List of tokenized training samples from all languages.
-    - val_all_languages: List of tokenized validation samples from all languages.
-    - test_all_languages: List of tokenized test samples from all languages.
-    """
-    train_all_languages = []
-    val_all_languages = []
-    test_all_languages = []
-
-    # number of samples per language. Assume we want equal amount of data for every language.
-    langs = LANGUAGES
-    n_train_sample_lang = int(WIKI_TRAINING_SAMPLES / len(langs))
-    n_eval_sample_lang =  int(WIKI_VALIDATION_SAMPLES / len(langs))
-    n_test_sample_lang =  int(WIKI_TEST_SAMPLES / len(langs))
-                                                                   
-    for language in langs:
-        path = os.path.join(data_dir, f'{language}.data.json', 'AA', f"wiki_00")
-
-        with open(path, 'r') as input_file:
-            examples = []
-
-            for line in input_file:
-                doc = json.loads(line)
-
-                # remove unnecessary chars and tags
-                text = doc["text"].strip()
-                if text == "":
-                    continue
-                text = text.replace("\n", " ")
-                text = text.replace("[...]", "")
-                if "src=" in text: 
-                    continue
-                
-                # tokenize the sentence by applying padding to max_length
-                tokenized_text = tokenizer.encode_plus(text, max_length = max_seq_length, truncation =True, padding  = 'max_length')
-
-                examples.append(tokenized_text) 
-
-            # split seperately for every language
-            train, val, test = split_data(examples, n_train_sample_lang, n_eval_sample_lang, n_test_sample_lang)
-
-            Logger.info(f'{language} training data size {len(train)}') 
-            Logger.info(f'{language} validation data size {len(val)}') 
-            Logger.info(f'{language} test data size {len(test)}') 
-
-            train_all_languages.extend(train)
-            val_all_languages.extend(val)
-            test_all_languages.extend(test)
-
-    return train_all_languages, val_all_languages, test_all_languages
-
 def load_wikipedia_from_cache(cached_features_file: str,
                     overwrite_cache: bool,
                     data_dir: str,
@@ -320,20 +236,17 @@ def load_wikipedia_from_cache(cached_features_file: str,
     Returns:
     - dataset: torch.utils.Dataset.
     """
-    if os.path.exists(f'{mode}_'+cached_features_file) and not overwrite_cache:
+    if os.path.exists(cached_features_file) and not overwrite_cache:
         Logger.info("Loading features from cached file %s", cached_features_file)
-        dataset = torch.load(f'{mode}_'+cached_features_file)
+        dataset = torch.load(cached_features_file)
     else:
         Logger.info("Creating features from dataset file at %s", data_dir)
-        train_dataset, val_dataset, test_dataset = create_wikipedia_dataset(data_dir,
-                                 tokenizer,
-                                 max_seq_length)
+        dataset = create_wikipedia_dataset(tokenizer,
+                                 max_seq_length,
+                                 mode)
         
         Logger.info("Saving features into cached file %s", cached_features_file)
-        for split_dataset, split in zip([train_dataset, val_dataset, test_dataset], ['train', 'dev', 'test']):
-            torch.save(split_dataset, f'{split}_'+cached_features_file)
-
-        dataset = val_dataset if mode == 'dev' else train_dataset
+        torch.save(dataset, cached_features_file)
 
     return dataset
 
@@ -377,33 +290,34 @@ def create_features_from_glue_dataset(data_dir: str,
 
     return features
 
-def create_wikipedia_dataset(data_dir: str,
-                                 tokenizer: AutoTokenizer,
-                                 max_seq_length: int):
+def tokenize_batch(examples, tokenizer, max_length):
+    dict =  tokenizer(examples['text'], padding= 'max_length', truncation= True,
+                      max_length = max_length)
+    return dict
+
+def create_wikipedia_dataset(tokenizer: AutoTokenizer,
+                                 max_seq_length: int,
+                                 mode: str):
     """
     Creates features for a Wikipedia dataset to be used.
 
     Parameters:
-        data_dir: Path to the directory containing the Wikipedia dataset.
         tokenizer: Tokenizer to convert text into tokenized input.
         max_seq_length: Maximum sequence length for tokenized inputs.
-
+        mode: train or val 
     Returns:
-        train_dataset: A dataset containing training features.
-        val_dataset: A dataset containing validation features.
-        test_dataset: A dataset containing test features.
+        tokenized_dataset: A dataset containing training features.
     """
-    train_all_languages, val_all_languages, test_all_languages = preprocess_wikipedia(data_dir, tokenizer, max_seq_length)
+    #! pip install apache-beam
+    dataset = load_dataset("wikipedia", "20220301.en")['train'] 
+    dataset = dataset.remove_columns(["id", "url","title"])
+    dataset = dataset.shuffle(seed=0)
     
-    train_input_ids, train_attention_mask = input_features(train_all_languages)
-    val_input_ids, val_attention_mask = input_features(val_all_languages)
-    test_input_ids, test_attention_mask = input_features(test_all_languages)
+    dataset = split_data(dataset, mode)
 
-    train_dataset = MLM_Dataset(train_input_ids, train_attention_mask)
-    val_dataset = MLM_Dataset(val_input_ids, val_attention_mask)
-    test_dataset = MLM_Dataset(test_input_ids, test_attention_mask)
-
-    return train_dataset, val_dataset, test_dataset
+    tokenized_dataset = dataset.map(lambda batch: tokenize_batch(batch, tokenizer, max_seq_length), batched = True)
+    tokenized_dataset = tokenized_dataset.remove_columns(["text"])
+    return tokenized_dataset
 
 def input_features(features):
     """
@@ -421,7 +335,7 @@ def input_features(features):
     all_attention_mask = torch.tensor([f.attention_mask for f in features], dtype=torch.long)
     return all_input_ids, all_attention_mask
 
-def build_dataset(features, task: str):
+def build_glue_dataset(features, task: str):
     """
     Build a TensorDataset from features.
 

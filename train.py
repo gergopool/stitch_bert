@@ -150,7 +150,8 @@ def main(args):
     set_seed(args.seed)
 
     # Initialize the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=False)
+    use_fast = True if args.task=='mlm' else False
+    tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=use_fast)
     Logger.info("Tokenizer initialized.")
 
     # Initialize the pre-trained transformer
@@ -200,7 +201,7 @@ def parse_args():
     parser.add_argument("--model_type",
                         type=str,
                         default='bert-base-uncased',
-                        help="Type of the model. Default is 'bert-base-uncased'. Use xlm-roberta-base for MLM task")
+                        help="Type of the model. Default is 'bert-base-uncased'.")
     parser.add_argument("--seed",
                         type=int,
                         default=0,
