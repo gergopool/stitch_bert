@@ -278,7 +278,7 @@ def vis_avg_sim_per_type(file):
     plt.show()
 
 
-def generate_table_for_latex(file):
+def layer_sim_table(file):
     vis_tasks = ['aircraft','cifar10','cifar100','dtd','flowers','food','pets']
     nlp_tasks = ['mnli','mrpc','qnli','qqp','rte','sst-2','wnli']
     df = pd.read_csv(file)
@@ -292,7 +292,7 @@ def generate_table_for_latex(file):
     vis_df.drop(['cka_mean', 'cka_std'], axis=1, inplace=True)
     vis_df.drop(['fs_mean', 'fs_std'], axis=1, inplace=True)
     vis_df['layer'] = vis_df['layer'] + 1
-    print(vis_df)
+
     nlp_df = df[df['task1'].isin(nlp_tasks) & df['task2'].isin(nlp_tasks)]
     nlp_df = nlp_df.groupby('layer')[['jaccard', 'cka', 'fs']].agg(['mean', 'std']).reset_index()
     nlp_df.columns = ['layer', 'jaccard_mean', 'jaccard_std', 'cka_mean', 'cka_std', 'fs_mean', 'fs_std']
@@ -303,19 +303,42 @@ def generate_table_for_latex(file):
     nlp_df.drop(['cka_mean', 'cka_std'], axis=1, inplace=True)
     nlp_df.drop(['fs_mean', 'fs_std'], axis=1, inplace=True)
     nlp_df['layer'] = nlp_df['layer'] + 1
-    print(nlp_df)
+
+    return vis_df, nlp_df
+
+
+def performance_table(file,task_type):
+    
+    df = pd.read_csv(file)
+    df = df.sort_values(['task', 'seed'], ascending=[True, True])
+    filtered_df = df[df['type'] == task_type]
+    filtered_df = filtered_df.groupby('task').agg({
+        'orig': ['mean', 'std'],
+        'masked': ['mean', 'std'],
+        'retrained': ['mean', 'std']
+    }).reset_index()
+    filtered_df.columns = ['task', 'orig_mean', 'orig_std', 'masked_mean', 'masked_std', 'retrained_mean', 'retrained_std']
+    filtered_df['orig'] = filtered_df.apply(lambda row: f"{row['orig_mean']:.2f} ± {row['orig_std']:.2f}", axis=1)
+    filtered_df.drop(['orig_mean', 'orig_std'], axis=1, inplace=True)
+    filtered_df['masked'] = filtered_df.apply(lambda row: f"{row['masked_mean']:.2f} ± {row['masked_std']:.2f}", axis=1)
+    filtered_df.drop(['masked_mean', 'masked_std'], axis=1, inplace=True)
+    filtered_df['retrained'] = filtered_df.apply(lambda row: f"{row['retrained_mean']:.2f} ± {row['retrained_std']:.2f}", axis=1)
+    filtered_df.drop(['retrained_mean', 'retrained_std'], axis=1, inplace=True)
+
+    return filtered_df
 
 
 if __name__ == "__main__":
 
-    # file = "./evaluation.csv"
+    file = "./evaluation.csv"
+    vision_table, nlp_table = performance_table(file,'vis'), performance_table(file,'nlp')
     # vis_performance_per_type(file, "vis")
     # vis_performance_per_type(file, "nlp")
     # vis_performance(file)
     # vis_avg_performance(file)
     # vis_mask_sparsity(file)
     # vis_sparsity_per_type(file)
-    file = './comparison.csv'
+    # file = './comparison.csv'
     # vis_sim_per_layer(file)
     # vis_avg_sim_per_type(file)
-    generate_table_for_latex(file)
+    # vis_df, nlp_df = layer_sim_table(file)
