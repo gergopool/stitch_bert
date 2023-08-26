@@ -278,6 +278,34 @@ def vis_avg_sim_per_type(file):
     plt.show()
 
 
+def generate_table_for_latex(file):
+    vis_tasks = ['aircraft','cifar10','cifar100','dtd','flowers','food','pets']
+    nlp_tasks = ['mnli','mrpc','qnli','qqp','rte','sst-2','wnli']
+    df = pd.read_csv(file)
+    vis_df =  df[df['task1'].isin(vis_tasks) & df['task2'].isin(vis_tasks)]
+    vis_df = vis_df.groupby('layer')[['jaccard', 'cka', 'fs']].agg(['mean', 'std']).reset_index()
+    vis_df.columns = ['layer', 'jaccard_mean', 'jaccard_std', 'cka_mean', 'cka_std', 'fs_mean', 'fs_std']
+    vis_df['jaccard'] = vis_df.apply(lambda row: f"{row['jaccard_mean']:.2f} ± {row['jaccard_std']:.2f}", axis=1)
+    vis_df['cka'] = vis_df.apply(lambda row: f"{row['cka_mean']:.2f} ± {row['cka_std']:.2f}", axis=1)
+    vis_df['fs'] = vis_df.apply(lambda row: f"{row['fs_mean']:.2f} ± {row['fs_std']:.2f}", axis=1)
+    vis_df.drop(['jaccard_mean', 'jaccard_std'], axis=1, inplace=True)
+    vis_df.drop(['cka_mean', 'cka_std'], axis=1, inplace=True)
+    vis_df.drop(['fs_mean', 'fs_std'], axis=1, inplace=True)
+    vis_df['layer'] = vis_df['layer'] + 1
+    print(vis_df)
+    nlp_df = df[df['task1'].isin(nlp_tasks) & df['task2'].isin(nlp_tasks)]
+    nlp_df = nlp_df.groupby('layer')[['jaccard', 'cka', 'fs']].agg(['mean', 'std']).reset_index()
+    nlp_df.columns = ['layer', 'jaccard_mean', 'jaccard_std', 'cka_mean', 'cka_std', 'fs_mean', 'fs_std']
+    nlp_df['jaccard'] = nlp_df.apply(lambda row: f"{row['jaccard_mean']:.2f} ± {row['jaccard_std']:.2f}", axis=1)
+    nlp_df['cka'] = nlp_df.apply(lambda row: f"{row['cka_mean']:.2f} ± {row['cka_std']:.2f}", axis=1)
+    nlp_df['fs'] = nlp_df.apply(lambda row: f"{row['fs_mean']:.2f} ± {row['fs_std']:.2f}", axis=1)
+    nlp_df.drop(['jaccard_mean', 'jaccard_std'], axis=1, inplace=True)
+    nlp_df.drop(['cka_mean', 'cka_std'], axis=1, inplace=True)
+    nlp_df.drop(['fs_mean', 'fs_std'], axis=1, inplace=True)
+    nlp_df['layer'] = nlp_df['layer'] + 1
+    print(nlp_df)
+
+
 if __name__ == "__main__":
 
     # file = "./evaluation.csv"
@@ -288,6 +316,6 @@ if __name__ == "__main__":
     # vis_mask_sparsity(file)
     # vis_sparsity_per_type(file)
     file = './comparison.csv'
-    vis_sim_per_layer(file)
-    vis_avg_sim_per_type(file)
-
+    # vis_sim_per_layer(file)
+    # vis_avg_sim_per_type(file)
+    generate_table_for_latex(file)
