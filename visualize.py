@@ -246,7 +246,7 @@ def vis_avg_sim_per_type(file):
 
     df = pd.read_csv(file)
     vis_tasks = ['aircraft','cifar10','cifar100','dtd','flowers','food','pets']
-    nlp_tasks = ['cola','mnli','mrpc','qnli','qqp','rte','sst-2','sts-b','wnli']
+    nlp_tasks = ['mnli','mrpc','qnli','qqp','rte','sst-2','wnli']
 
     vis_df =  df[df['task1'].isin(vis_tasks) & df['task2'].isin(vis_tasks)]
     nlp_df = df[df['task1'].isin(nlp_tasks) & df['task2'].isin(nlp_tasks)]
