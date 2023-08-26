@@ -2,6 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 def vis_performance_per_type(file, task_type):
     df = pd.read_csv(file)
     df = df.sort_values(['task', 'seed'], ascending=[True, True])
@@ -67,8 +68,6 @@ def vis_performance_per_type(file, task_type):
     plt.subplots_adjust(right=0.89) 
     plt.subplots_adjust(hspace=0.4)
     plt.show()
-
-
 
 
 def vis_performance(file):
@@ -175,6 +174,7 @@ def vis_mask_sparsity(file):
 
 
 def vis_sparsity_per_type(file):
+
     df = pd.read_csv(file)
     vision_df = df[df['type'] == 'vis']
     nlp_df = df[df['type'] == 'nlp']
@@ -209,13 +209,85 @@ def vis_sparsity_per_type(file):
     plt.show()
 
 
+def vis_sim_per_layer(file):
+
+    df = pd.read_csv(file)
+    tasks = df['task1'].unique()
+    fig, axes = plt.subplots(nrows=4, ncols=4, figsize=(16, 12))
+    fig.subplots_adjust(hspace=0.5)
+
+    for i, task in enumerate(tasks):
+        row = i // 4
+        col = i % 4
+        
+        filtered_df = df[(df['task1'] == task) & (df['task2'] == task)]
+        mean_df = filtered_df.groupby("layer")[["jaccard", "cka", "fs"]].mean().reset_index()
+        
+        ax = axes[row, col]
+        ax.plot(range(1, len(mean_df["layer"]) + 1), mean_df["jaccard"], label="Jaccard ")
+        ax.plot(range(1, len(mean_df["layer"]) + 1), mean_df["cka"], label="CKA")
+        ax.plot(range(1, len(mean_df["layer"]) + 1), mean_df["fs"], label="Functional ")
+        ax.set_xlabel("Layer",fontsize=7)
+        ax.set_ylabel("Similarity",fontsize=7)
+        ax.set_xticks(np.arange(1, 13, 1))
+        ax.set_title(f"{task}",fontsize=10)
+
+    handles, labels = ax.get_legend_handles_labels()
+    fig.legend(handles, labels, loc='center right')
+    plt.tight_layout()
+    plt.subplots_adjust(left=0.05) 
+    plt.subplots_adjust(right=0.89) 
+    plt.subplots_adjust(hspace=0.8)
+    plt.subplots_adjust(wspace=0.3)
+    plt.show()
+
+
+def vis_avg_sim_per_type(file):
+
+    df = pd.read_csv(file)
+    vis_tasks = ['aircraft','cifar10','cifar100','dtd','flowers','food','pets']
+    nlp_tasks = ['cola','mnli','mrpc','qnli','qqp','rte','sst-2','sts-b','wnli']
+
+    vis_df =  df[df['task1'].isin(vis_tasks) & df['task2'].isin(vis_tasks)]
+    nlp_df = df[df['task1'].isin(nlp_tasks) & df['task2'].isin(nlp_tasks)]
+    mean_vis_df = vis_df.groupby("layer")[["jaccard", "cka", "fs"]].mean().reset_index()
+    mean_nlp_df = nlp_df.groupby("layer")[["jaccard", "cka", "fs"]].mean().reset_index()
+
+    _, axes = plt.subplots(1, 2, figsize=(8, 4))
+
+    axes[0].plot(range(1, len(mean_vis_df["layer"]) + 1), mean_vis_df["jaccard"], label="Jaccard", marker='o')
+    axes[0].plot(range(1, len(mean_vis_df["layer"]) + 1), mean_vis_df["cka"], label="CKA", marker='o')
+    axes[0].plot(range(1, len(mean_vis_df["layer"]) + 1), mean_vis_df["fs"], label="Functional", marker='o')
+    axes[0].set_xlabel("Layer")
+    axes[0].set_xticks(np.arange(1, 13, 1))
+    axes[0].set_ylabel("Similarity")
+    axes[0].set_title("Vision Tasks")
+    axes[0].legend()
+    axes[0].grid(True)
+    axes[1].plot(range(1, len(mean_nlp_df["layer"]) + 1), mean_nlp_df["jaccard"], label="Jaccard", marker='o')
+    axes[1].plot(range(1, len(mean_nlp_df["layer"]) + 1), mean_nlp_df["cka"], label="CKA", marker='o')
+    axes[1].plot(range(1, len(mean_nlp_df["layer"]) + 1), mean_nlp_df["fs"], label="Functional", marker='o')
+    axes[1].set_xlabel("Layer")
+    axes[1].set_xticks(np.arange(1, 13, 1))
+    axes[1].set_ylabel("Similarity")
+    axes[1].set_title("NLP Tasks")
+    axes[1].legend()
+    axes[1].grid(True)
+
+    plt.tight_layout()
+    plt.show()
+
+
 if __name__ == "__main__":
 
-    file = "./evaluation.csv"
-    vis_performance_per_type(file, "vis")
-    vis_performance_per_type(file, "nlp")
+    # file = "./evaluation.csv"
+    # vis_performance_per_type(file, "vis")
+    # vis_performance_per_type(file, "nlp")
     # vis_performance(file)
-    vis_avg_performance(file)
-    vis_mask_sparsity(file)
-    vis_sparsity_per_type(file)
+    # vis_avg_performance(file)
+    # vis_mask_sparsity(file)
+    # vis_sparsity_per_type(file)
+    file = './comparison.csv'
+    vis_sim_per_layer(file)
+    vis_avg_sim_per_type(file)
 
