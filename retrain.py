@@ -19,7 +19,8 @@ def main(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Initialize the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=False)
+    use_fast = True if args.task=='mlm' else False
+    tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=use_fast)
     Logger.info("Tokenizer initialized.")
 
     # Load the mask
@@ -76,7 +77,7 @@ def parse_args():
     parser.add_argument("--model_type",
                         type=str,
                         default='bert-base-uncased',
-                        help="Type of the model. Default is 'bert-base-uncased'. Use xlm-roberta-base for MLM task")
+                        help="Type of the model. Default is 'bert-base-uncased'.")
     parser.add_argument("--overwrite_cache",
                         action='store_true',
                         help="If True, overwrite the cached data. Default is False.")

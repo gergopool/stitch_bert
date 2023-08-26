@@ -25,7 +25,8 @@ def main(args):
     model.eval()
 
     # Create dataloader
-    tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=False)
+    use_fast = True if args.task=='mlm' else False
+    tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=use_fast)
     val_dataset = load_data_from_args(args, tokenizer, dev=True)
     batch_size = args.batch_size if not GlobalState.debug else 4
     collate_fn = DataCollatorForLanguageModeling(tokenizer=tokenizer) if args.task == 'mlm' else None
