@@ -2,8 +2,24 @@ import os
 import inspect
 import logging
 
+TASKS = {
+    'nlp': ['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli', 'mlm'],
+    'vis': ['cifar10', 'cifar100', 'pets', 'flowers', 'food', 'dtd', 'aircraft'],
+}
+
+N_CLASSES = {
+    'cifar10': 10,
+    'cifar100': 100,
+    'pets': 37,
+    'flowers': 102,
+    'food': 101,
+    'dtd': 47,
+    'aircraft': 100,
+}
+
 
 class CustomLogFormatter(logging.Formatter):
+    """Custom log formatter with clickable links to caller file and line."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -18,6 +34,8 @@ class CustomLogFormatter(logging.Formatter):
 
 
 class Logger:
+    """Utility class for logging with custom formatting and logging levels."""
+
     _logger = None
 
     @staticmethod
@@ -28,6 +46,7 @@ class Logger:
 
     @staticmethod
     def initialise(debug=False):
+        """Initializes the logger with custom formatting and logging level."""
         level = logging.DEBUG if debug else logging.INFO
 
         formatter = CustomLogFormatter(
@@ -55,4 +74,5 @@ class Logger:
 
 
 class GlobalState:
+    """Container for global debug state."""
     debug = False

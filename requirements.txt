@@ -3,3 +3,7 @@ transformers
 scikit-learn
 scipy
 numpy
+pytest
+pytest-xdist
+gputil
+apache-beam
