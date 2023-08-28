@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 
 
 def vis_performance_per_type(file, task_type):
@@ -328,17 +329,57 @@ def performance_table(file,task_type):
     return filtered_df
 
 
+def vis_heatmap(file, task_type):
+
+    df = pd.read_csv(file)
+    if task_type == 'nlp':
+        tasks = ['mnli','mrpc','qnli','qqp','rte','sst-2','wnli']
+    else:
+        tasks = ['aircraft','cifar10','cifar100','dtd','flowers','food','pets']
+
+    filtered_df = df[df['task1'].isin(tasks) & df['task2'].isin(tasks)]
+    agg_df = filtered_df.groupby(['task1', 'task2']).mean().reset_index()
+    jaccard_heatmap = agg_df.pivot('task1', 'task2', 'jaccard')
+    cka_heatmap = agg_df.pivot('task1', 'task2', 'cka')
+    fs_heatmap = agg_df.pivot('task1', 'task2', 'fs')
+
+    _, axes = plt.subplots(1, 3, figsize=(10, 4))
+
+    sns.heatmap(jaccard_heatmap,  annot=True, fmt=".2f", ax=axes[0], cbar=False)
+    sns.heatmap(cka_heatmap,  annot=True, fmt=".2f", ax=axes[1], cbar=False)
+    sns.heatmap(fs_heatmap, annot=True, fmt=".2f", ax=axes[2], cbar=False)
+    axes[0].set_title('Jaccard Similarity')
+    axes[0].set_aspect('equal')
+    axes[0].set_xlabel('Task')
+    axes[0].set_ylabel('Task')
+    axes[1].set_title('CKA ')
+    axes[1].set_aspect('equal')
+    axes[1].set_xlabel('Task')
+    axes[1].set_ylabel('Task')
+    axes[2].set_title('Functional Similarity')
+    axes[2].set_aspect('equal')
+    axes[2].set_xlabel('Task')
+    axes[2].set_ylabel('Task')
+
+    for ax in axes:
+        ax.tick_params(axis='x', labelrotation=45)
+        ax.tick_params(axis='y', labelrotation=0)
+    plt.tight_layout()
+    plt.show()
+
+
 if __name__ == "__main__":
 
-    file = "./evaluation.csv"
-    vision_table, nlp_table = performance_table(file,'vis'), performance_table(file,'nlp')
+    # file = "./evaluation.csv"
+    # vision_table, nlp_table = performance_table(file,'vis'), performance_table(file,'nlp')
     # vis_performance_per_type(file, "vis")
     # vis_performance_per_type(file, "nlp")
     # vis_performance(file)
     # vis_avg_performance(file)
     # vis_mask_sparsity(file)
     # vis_sparsity_per_type(file)
-    # file = './comparison.csv'
+    file = './comparison.csv'
     # vis_sim_per_layer(file)
     # vis_avg_sim_per_type(file)
     # vis_df, nlp_df = layer_sim_table(file)
+    vis_heatmap(file,'nlp')
