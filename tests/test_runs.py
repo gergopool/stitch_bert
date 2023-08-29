@@ -64,16 +64,29 @@ def test_retrain_nlp_debug():
     retrain_main(args)
 
 
-def test_compare_vis_debug():
-    cli_args = ['cifar100', '0', 'food', '4', '--debug']
+def test_compare_linear_vis_debug():
+    cli_args = ['cifar100', '0', 'food', '4', '--stitch-type', 'linear', '--debug']
     args = comapre_parse_args(cli_args)
     compare_main(args)
 
 
-def test_compare_nlp_debug():
-    cli_args = ['cola', '1', 'wnli', '4', '--debug']
+def test_compare_linear_nlp_debug():
+    cli_args = ['cola', '1', 'wnli', '4', '--stitch-type', 'linear', '--debug']
     args = comapre_parse_args(cli_args)
     compare_main(args)
+
+def test_compare_linearbn_vis_debug():
+    cli_args = ['cifar100', '0', 'food', '4', '--stitch-type', 'linearbn', '--debug']
+    args = comapre_parse_args(cli_args)
+    compare_main(args)
+
+
+def test_compare_linearbn_nlp_debug():
+    cli_args = ['cola', '1', 'wnli', '4', '--stitch-type', 'linearbn', '--debug']
+    args = comapre_parse_args(cli_args)
+    compare_main(args)
+
+
 
 def test_evaluate_vis_debug():
     cli_args = ['pets', '0', '--debug']

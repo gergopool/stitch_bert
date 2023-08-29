@@ -6,3 +6,4 @@ numpy
 pytest
 pytest-xdist
 gputil
+pandas
