@@ -39,6 +39,11 @@ def test_train_nlp_debug():
     args = train_parse_args(cli_args)
     train_main(args)
 
+def test_train_mlm_debug():
+    cli_args = ['mlm', '0', '--debug']
+    args = train_parse_args(cli_args)
+    train_main(args)
+
 
 def test_mask_vis_debug():
     cli_args = ['pets', '1', '--debug']
@@ -48,6 +53,11 @@ def test_mask_vis_debug():
 
 def test_mask_nlp_debug():
     cli_args = ['sst-2', '2', '--debug']
+    args = mask_parse_args(cli_args)
+    mask_main(args)
+
+def test_mask_mlm_debug():
+    cli_args = ['mlm', '2', '--debug']
     args = mask_parse_args(cli_args)
     mask_main(args)
 
@@ -63,6 +73,10 @@ def test_retrain_nlp_debug():
     args = retrain_parse_args(cli_args)
     retrain_main(args)
 
+def test_retrain_mlm_debug():
+    cli_args = ['mlm', '3', '--debug']
+    args = retrain_parse_args(cli_args)
+    retrain_main(args)
 
 def test_compare_vis_debug():
     cli_args = ['cifar100', '0', 'food', '4', '--debug']
@@ -75,6 +89,11 @@ def test_compare_nlp_debug():
     args = comapre_parse_args(cli_args)
     compare_main(args)
 
+def test_compare_mlm_debug():
+    cli_args = ['mnli', '1', 'mlm', '4', '--debug']
+    args = comapre_parse_args(cli_args)
+    compare_main(args)
+
 def test_evaluate_vis_debug():
     cli_args = ['pets', '0', '--debug']
     args = evaluate_parse_args(cli_args)
@@ -83,5 +102,10 @@ def test_evaluate_vis_debug():
 
 def test_evaluate_nlp_debug():
     cli_args = ['qqp', '1', '--debug']
+    args = evaluate_parse_args(cli_args)
+    evaluate_main(args)
+
+def test_evaluate_mlm_debug():
+    cli_args = ['mlm', '1', '--debug']
     args = evaluate_parse_args(cli_args)
     evaluate_main(args)

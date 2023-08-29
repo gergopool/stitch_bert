@@ -15,10 +15,10 @@ def build_pretrained_transformer(task_name: str) -> nn.Module:
     Returns:
         Pretrained model for the given task.
     """
-    if task_name in TASKS['nlp']:
-        return _build_nlp_model(task_name)
-    elif task_name == 'mlm':
+    if task_name == 'mlm':
         return AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
+    elif task_name in TASKS['nlp']:
+        return _build_nlp_model(task_name)
     else:
         return _build_vision_model(task_name)
 

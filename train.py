@@ -1,11 +1,8 @@
 import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = 'true'
 import argparse
 import torch
-from copy import deepcopy
-from transformers import AutoTokenizer, DataCollatorForLanguageModeling, get_linear_schedule_with_warmup
-from torch.utils.data import DataLoader
-from transformers import TrainingArguments, Trainer
-from torch.utils.data import TensorDataset
 
 # Import custom modules
 from src.data import load_data_from_args

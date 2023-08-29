@@ -39,7 +39,9 @@ def predict(model: Bert,
     preds, labels = [], []
     for iter_i, batch in enumerate(data_loader):
 
-        if isinstance(data_loader.dataset, TensorDataset):
+        if hasattr(batch, 'input_ids'):
+            inputs = {key: value.to(device) for key, value in batch.items()}
+        else:
             # Prepare input
             batch = tuple(t.to(device) for t in batch)
             if is_vis:
@@ -51,8 +53,6 @@ def predict(model: Bert,
                     "attention_mask": batch[1],
                     "labels": batch[3]
                 }
-        else:
-            inputs = {key: value.to(device) for key, value in batch.items()}
 
         inputs['head_mask'] = mask
 

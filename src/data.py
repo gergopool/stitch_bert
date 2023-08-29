@@ -16,6 +16,7 @@ IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
 
 # Settings for those datasets that has no train-dev-test split
 SPLIT_MAX_TEST_SIZE = 20000
+SPLIT_MAX_TRAIN_SIZE = 200000
 TEST_SPLIT_RATIO = 0.1
 
 
@@ -80,10 +81,8 @@ def load_data(task: str,
         dataset = load_vision_data(data_dir=data_dir, task=task, dev=dev)
         collate_fn = None
     elif task == 'mlm':
-        root = root = os.path.join(data_dir, "wikipedia")
         tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=True)
-        dataset = load_mlm_data(tokenizer,
-                                data_dir=root, 
+        dataset = load_mlm_data(data_dir=data_dir, 
                                 dev = dev,
                                 max_seq_length=max_seq_length)
         collate_fn = DataCollatorForLanguageModeling(tokenizer=tokenizer) 
@@ -197,10 +196,44 @@ def load_glue_data(data_dir: str,
     # Convert to Tensors and build dataset
     return build_dataset(features, task)
 
-def load_mlm_data(tokenizer: AutoTokenizer,
-                  data_dir: str = "~/.cache/huggingface/datasets",
+def load_mlm_data(data_dir: str,
                   dev: bool = False,
+                  overwrite_cache: bool = False,
                   max_seq_length: int = 128):
+    """
+    Load and cache examples from Wikipedia dataset.
+
+    Parameters:
+    - data_dir: Directory where the data is located.
+    - dev: Whether to use evaluation data. If False, training data will be used.
+    - overwrite_cache: If True, overwrite the cached data.
+    - max_seq_length: Maximum sequence length for the tokenized data.
+
+    Returns:
+    - Dataset instance containing the cached data.
+    """
+
+    # Determine if to load from cache or from dataset file
+    mode = "dev" if dev else "train"
+
+    # Select task directory
+    save_folder = os.path.join(data_dir, 'wikipedia', '200k_cached')
+    os.makedirs(save_folder, exist_ok=True)
+
+    cached_features_file = os.path.join(save_folder, f"cached_{mode}_{max_seq_length}.pt")
+
+    # Load from cache if possible, otherwise load from dataset
+    dataset = load_from_cache(cached_features_file,
+                               overwrite_cache,
+                               data_dir,
+                               'mlm',
+                               max_seq_length,
+                               dev)
+    return dataset
+
+def load_wiki_data(data_dir: str = "~/.cache/huggingface/datasets",
+                   dev: bool = False,
+                   max_seq_length: int = 128):
     """
     Load masked language model (MLM) data.
 
@@ -212,6 +245,8 @@ def load_mlm_data(tokenizer: AutoTokenizer,
     Returns:
     - dataset: The loaded dataset in a suitable format for MLM.
     """
+
+    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=True)
 
     # Prepare dataset split
     dataset = load_dataset("wikipedia", "20220301.en", cache_dir=data_dir)['train'] 
@@ -229,54 +264,10 @@ def load_mlm_data(tokenizer: AutoTokenizer,
     tokenized_dataset = dataset.map(tokenize, batched = True)
     tokenized_dataset = tokenized_dataset.remove_columns(["text"])
 
-    # Apply mask to the tokenized dataset
-    tokenized_masked_dataset = tokenized_dataset.map(
-        lambda batch: mask_tokens(batch, tokenizer),
-        batched=True
-    )
-
-    return tokenized_masked_dataset
+    return tokenized_dataset
 
 
-def mask_tokens(inputs: dict, tokenizer: AutoTokenizer, mask_prob: float = 0.15):
-    """
-    Prepare masked tokens inputs/labels for masked language modeling: 15% MASK tokens.
 
-    Parameters:
-        inputs: Tokenized sentences.
-        tokenizer: Tokenizer object for encoding/decoding text to token IDs.
-        mask_prob: Probability of masking a token.
-    Returns:
-        inputs: A dictionary containing masked inputs and labels.
-    """
-    
-    labels = inputs["input_ids"].clone()
-    # We sample a few tokens in each sequence for MLM training (with probability `mask_prob`)
-    probability_matrix = torch.full(labels.shape, mask_prob)
-    special_tokens_mask = [
-        tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True) for val in labels.tolist()
-    ]
-
-
-    probability_matrix.masked_fill_(torch.tensor(special_tokens_mask, dtype=torch.bool), value=0.0)
-    masked_indices = torch.bernoulli(probability_matrix).bool()
-    labels[~masked_indices] = -100  # We only compute loss on masked tokens
-
-    # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
-    samples = torch.bernoulli(torch.full(labels.shape, 0.8)).bool()
-    indices_replaced = samples & masked_indices
-    inputs["input_ids"][indices_replaced] = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
-
-    # 10% of the time, we replace masked input tokens with random word
-    samples = torch.bernoulli(torch.full(labels.shape, 0.5)).bool()
-    indices_random = samples & masked_indices & ~indices_replaced
-    random_words = torch.randint(len(tokenizer), labels.shape, dtype=torch.long)
-    inputs["input_ids"][indices_random] = random_words[indices_random]
-
-    # The rest of the time (10% of the time) we keep the masked input tokens unchanged
-    inputs["labels"] = labels
-
-    return inputs
 
 def get_split(dataset: Dataset, mode: str) -> Dataset:
     """
@@ -291,11 +282,12 @@ def get_split(dataset: Dataset, mode: str) -> Dataset:
     """
  
     dataset_length = len(dataset)
+    train_size = min(int(dataset_length * (1 - (2*TEST_SPLIT_RATIO))), SPLIT_MAX_TRAIN_SIZE)
     test_size = min(int(dataset_length * TEST_SPLIT_RATIO), SPLIT_MAX_TEST_SIZE)
 
     indices = list(range(dataset_length))
     if mode == 'train':
-        split_indices = indices[:-2*test_size]
+        split_indices = indices[:train_size]
     elif mode=='dev':
         split_indices = indices[-2*test_size:-test_size]
     elif mode=='test':
@@ -329,7 +321,10 @@ def load_from_cache(cached_features_file: str,
         features = torch.load(cached_features_file)
     else:
         Logger.info("Creating features from dataset file at %s", data_dir)
-        features = create_features_from_dataset(data_dir, task, max_seq_length, dev)
+        if task == 'mlm':
+            features = load_wiki_data(data_dir, dev, max_seq_length)
+        else:
+            features = create_features_from_dataset(data_dir, task, max_seq_length, dev)
         Logger.info("Saving features into cached file %s", cached_features_file)
         torch.save(features, cached_features_file)
 
@@ -489,7 +484,6 @@ class CustomBatchSampler(BatchSampler):
 class LimitedDataWrapper(Dataset):
 
     def __init__(self, dataset, n_points=20):
-        assert isinstance(dataset, Dataset), "Input dataset must be a subclass of torch.utils.data.Dataset"
         self.dataset = dataset
         self.n_points = n_points
 
