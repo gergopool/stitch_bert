@@ -264,7 +264,8 @@ def parse_args(cli_args=None):
     parser.add_argument("--debug", action='store_true', help="Run in debug mode. Default is False.")
     parser.add_argument("--pruning_method ",
                         type=str,
-                        choices=['structured', 'magnitude_uniform', 'magnitude_all'],
+                        choices=['structured',  'magnitude_all'],
+                        #todo magnitude_uniform
                         help="magnitude_uniform cuts the same percentage from all matrices, magnitude_all ")
     # Parse the arguments
     args = parser.parse_args(cli_args)
