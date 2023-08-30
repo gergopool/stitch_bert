@@ -62,23 +62,6 @@ def random_pruning_model(model, px):
         amount=px,
     )
 
-def pruning_model_custom(model, mask_dict):
-    """ Performs custom pruning given a pruning mask for mBERT model """
-    parameters_to_prune = []
-    mask_list = []
-    for layer_num in range(12):
-        for module_name in ["attention.self.query", "attention.self.key", "attention.self.value",
-                            "attention.output.dense", "intermediate.dense", "output.dense"]:
-            parameters_to_prune.append(eval(f"model.bert.encoder.layer[{layer_num}].{module_name}"))
-            mask_list.append(mask_dict[f'bert.encoder.layer.{layer_num}.{module_name}.weight_mask'])
-
-    if model.bert.pooler is not None and 'bert.pooler.dense.weight_mask' in mask_dict:
-        parameters_to_prune.append(model.bert.pooler.dense)
-        mask_list.append(mask_dict['bert.pooler.dense.weight_mask'])
-
-    for idx in range(len(parameters_to_prune)):
-        prune.CustomFromMask.apply(parameters_to_prune[idx], 'weight', mask=mask_list[idx])
-
 def see_weight_rate(model): 
     """ Computes the sparsity level of the given mBERT model """
     sum_list = 0
@@ -91,25 +74,6 @@ def see_weight_rate(model):
             sum_list = sum_list + float(eval(f"model.bert.encoder.layer[{idx}].{module_name}.weight_mask.nelement()"))
             zero_sum = zero_sum +\
                 float(torch.sum(eval(f"model.bert.encoder.layer[{idx}].{module_name}.weight_mask") == 0))
-
-    if model.bert.pooler is not None:
-        sum_list = sum_list + float(model.bert.pooler.dense.weight.nelement())
-        zero_sum = zero_sum + float(torch.sum(model.bert.pooler.dense.weight == 0))
- 
-    return 100.0 * zero_sum / sum_list
-
-def see_weight_rate(model): 
-    """ Computes the sparsity level of the given mBERT model """
-    sum_list = 0
-    zero_sum = 0
-    if isinstance(model, torch.nn.DataParallel):
-        model = model.module
-    for idx in range(12):
-        for module_name in ["attention.self.query", "attention.self.key", "attention.self.value",
-                            "attention.output.dense", "intermediate.dense", "output.dense"]:
-            sum_list = sum_list + float(eval(f"model.bert.encoder.layer[{idx}].{module_name}.weight.nelement()"))
-            zero_sum = zero_sum +\
-                float(torch.sum(eval(f"model.bert.encoder.layer[{idx}].{module_name}.weight") == 0))
 
     if model.bert.pooler is not None:
         sum_list = sum_list + float(model.bert.pooler.dense.weight.nelement())
