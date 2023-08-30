@@ -1,5 +1,5 @@
 """
-    This code is based on multiLMs-lang-neutral-subnets/helpers/analysis_tools.py
+    This code is based on https://github.com/negar-foroutan/multiLMs-lang-neutral-subnets/blob/main/helpers/analysis_tools.py
 """
 
 from asyncio.log import logger
@@ -172,20 +172,24 @@ def see_mask_zero_rate_per_component(mask_dict):
     return all_zero_rate
 
 
-def mask_sparsity_overlap_per_component(mask_dict1, mask_dict2):
-    """ Computes sparsity pattern similarity between every component of two pruned masks. """
+def jaccard_for_magnitude_pruning(mask_dict1, mask_dict2, last_layer):
+    """ Computes jaccard similarity till given last_layer """
 
     components = ["attention.self.query", "attention.self.key", "attention.self.value",
                   "attention.output.dense", "intermediate.dense", "output.dense"]
     comp_sparsity_overlap = {}
 
+    all_and = 0
+    all_union = 0
     for comp in components:
-        for idx in range(12):
+        for idx in range(last_layer):
             key = f'bert.encoder.layer.{idx}.' + comp + '.weight_mask'
-            comp_size = mask_dict1[key].nelement()
-            not_xor = torch.logical_not(torch.logical_xor(mask_dict1[key], mask_dict2[key]))
-            comp_similarity = torch.count_nonzero(not_xor)
-            rate = comp_similarity * 1.0 / comp_size
-            comp_sparsity_overlap[key] = rate
+            module_union = torch.logical_or(mask_dict1[key], mask_dict2[key]).sum().item()
+            module_and = torch.logical_and(mask_dict1[key], mask_dict2[key]).sum().item()
+            all_and += module_and
+            all_union += module_union
 
-    return comp_sparsity_overlap
+    jaccard = all_and * 1.0 / all_union
+
+
+    return jaccard

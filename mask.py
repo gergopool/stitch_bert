@@ -8,7 +8,7 @@ from src import Logger, GlobalState
 from src.data import load_data_from_args
 from src.models import load_model
 from src.metrics import get_metric_for
-from src.mask_utils import mask_heads
+from src.mask_utils import mask_heads, magnitude_masks
 from src.static import TASKS
 
 
@@ -30,13 +30,20 @@ def main(args):
 
     # Get mask
     is_vis = args.task in TASKS['vis']
-    mask = mask_heads(model, test_loader, metric, args.stop_threshold, args.drop_ratio, is_vis)
+    
+    postfix_for_pruning = ''
+    if args.pruning_method=='structured':
+        mask = mask_heads(model, test_loader, metric, args.stop_threshold, args.drop_ratio, is_vis)
+    elif args.pruning_method=='magnitude_uniform' or args.pruning_method=='magnitude_all':
+        mask = magnitude_masks(model, test_loader, metric, args.pruning_method, args.stop_threshold, args.drop_ratio, is_vis)
+        postfix_for_pruning = f'_{args.pruning_method}'
+
     Logger.info(f"Mask generation is done.")
 
     # Save mask
     if not GlobalState.debug:
         os.makedirs(args.out_dir, exist_ok=True)
-        save_path = os.path.join(args.out_dir, f"{args.task}_{args.seed}.pt")
+        save_path = os.path.join(args.out_dir, f"{args.task}_{args.seed}{postfix_for_pruning}.pt")
         torch.save(mask, save_path)
         Logger.info(f"Mask saved to {save_path}.")
     else:

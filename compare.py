@@ -9,14 +9,16 @@ from torch.utils.data import DataLoader
 from src.utils import set_seed
 from src.static import Logger, GlobalState, TASKS
 from src.compare import cka, jaccard_similarity, functional_similarity, calculate_embeddings
+from src.analysis_tools import jaccard_for_magnitude_pruning
 from src.models import load_model
 from src.metrics import get_metric_for, Metric
 from src.evaluator import evaluate
 from src.data import load_data_from_args
 
 
-def load_mask(mask_dir: str, task: str, seed: int, device: torch.device) -> torch.Tensor:
-    mask_path = os.path.join(mask_dir, f"{task}_{seed}.pt")
+def load_mask(mask_dir: str, task: str, seed: int, device: torch.device, pruning_method: str) -> torch.Tensor:
+    postfix_for_pruning = '' if pruning_method =='structured' else f'_{pruning_method}'
+    mask_path = os.path.join(mask_dir, f"{task}_{seed}{postfix_for_pruning}.pt")
     head_mask = torch.load(mask_path, map_location=device)
     Logger.info(f"Loaded mask from file {mask_path}.")
     return head_mask
@@ -39,7 +41,7 @@ def load_data_loaders(args) -> Tuple[DataLoader, DataLoader]:
     return train_loader, val_loader
 
 
-def load_models_and_masks(args, device: torch.device) -> Dict[str, Union[nn.Module, torch.Tensor]]:
+def load_models_and_masks(args, device: torch.device, pruning_method: str) -> Dict[str, Union[nn.Module, torch.Tensor]]:
     """
     Load models and masks based on the provided arguments.
 
@@ -53,8 +55,8 @@ def load_models_and_masks(args, device: torch.device) -> Dict[str, Union[nn.Modu
     model_info = {
         "model1": load_model(args.retrain_dir, args.task1, args.seed1, device),
         "model2": load_model(args.retrain_dir, args.task2, args.seed2, device),
-        "mask1": load_mask(args.mask_dir, args.task1, args.seed1, device),
-        "mask2": load_mask(args.mask_dir, args.task2, args.seed2, device)
+        "mask1": load_mask(args.mask_dir, args.task1, args.seed1, device, pruning_method),
+        "mask2": load_mask(args.mask_dir, args.task2, args.seed2, device, pruning_method)
     }
     return model_info
 
@@ -67,7 +69,8 @@ def calculate_layer_similarities(model_info: Dict[str, Union[nn.Module, torch.Te
                                  metric: Metric,
                                  n_points,
                                  is_vis: bool,
-                                 device: torch.device) -> Tuple[float, float, float]:
+                                 device: torch.device,
+                                 pruning_method: str) -> Tuple[float, float, float]:
     """
     Calculate similarities for a specific layer.
 
@@ -87,8 +90,13 @@ def calculate_layer_similarities(model_info: Dict[str, Union[nn.Module, torch.Te
         Jaccard, CKA and functional similarity for the given layer, respectively.
     """
     # Get jaccard similarity
-    current_jaccard = jaccard_similarity(model_info['mask1'][:layer_i + 1],
+    if pruning_method == 'magnitude_uniform' or pruning_method =='magnitude_all':
+        current_jaccard = jaccard_for_magnitude_pruning(model_info['mask1'], model_info["mask2"], layer_i + 1)
+    elif pruning_method == 'structured': 
+        current_jaccard = jaccard_similarity(model_info['mask1'][:layer_i + 1],
                                          model_info["mask2"][:layer_i + 1])
+    else:
+        raise ValueError(f"Unknown pruning method: {pruning_method}. Currently, we support magnitude_uniform, magnitude_all and structured.")
     Logger.info(f"Jaccard @ {layer_i+1} : {current_jaccard:.3f}.")
 
     # Calculate embeddings
@@ -123,7 +131,8 @@ def calculate_similarities(args,
                            model_info: Dict,
                            train_loader: DataLoader,
                            val_loader: DataLoader,
-                           device: torch.device) -> Dict[str, List[float]]:
+                           device: torch.device,
+                           pruning_method: str) -> Dict[str, List[float]]:
     """
     Calculate similarities for all layers.
 
@@ -155,7 +164,8 @@ def calculate_similarities(args,
             metric=metric,
             n_points=args.n_points,
             is_vis=is_vis,
-            device=device)
+            device=device,
+            pruning_method=pruning_method)
         results['jaccard'].append(current_jaccard)
         results['cka'].append(current_cka)
         results['fs'].append(current_fs)
@@ -191,8 +201,8 @@ def main(args):
     set_seed(args.run_seed)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     train_loader, val_loader = load_data_loaders(args)
-    model_info = load_models_and_masks(args, device)
-    results = calculate_similarities(args, model_info, train_loader, val_loader, device)
+    model_info = load_models_and_masks(args, device, args.pruning_method)
+    results = calculate_similarities(args, model_info, train_loader, val_loader, device, args.pruning_method)
     save_results(args, results)
 
 
@@ -252,7 +262,10 @@ def parse_args(cli_args=None):
                         default='results/compare/',
                         help="Directory to save the output. Default is './output'.")
     parser.add_argument("--debug", action='store_true', help="Run in debug mode. Default is False.")
-
+    parser.add_argument("--pruning_method ",
+                        type=str,
+                        choices=['structured', 'magnitude_uniform', 'magnitude_all'],
+                        help="magnitude_uniform cuts the same percentage from all matrices, magnitude_all ")
     # Parse the arguments
     args = parser.parse_args(cli_args)
 

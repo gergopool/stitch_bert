@@ -1,5 +1,5 @@
 """
-    This code is based on multiLMs-lang-neutral-subnets/helpers/pruning_utils.py
+    This code is based on https://github.com/negar-foroutan/multiLMs-lang-neutral-subnets/blob/main/helpers/pruning_utils.py
 """
 
 import torch.nn.utils.prune as prune
@@ -29,7 +29,7 @@ def component_wise_pruning_model(model, px):
     """ Performs component-wise magnitude pruning for mBERT model 
     Args:
         model: mBERT model
-        px (float): Pruning rate (a number between 0 and 1)
+        px (float): Pruning rate (a number between 0 and 1) or int number of parameters to prune
     """
     parameters_to_prune = get_params_to_prune(model)
     for param in parameters_to_prune:
@@ -40,7 +40,7 @@ def pruning_model(model, px):
     """ Performs magnitude pruning for mBERT model
     Args:
         model: mBERT model
-        px (float): Pruning rate (a number between 0 and 1)
+        px (float): Pruning rate (a number between 0 and 1) or int number of parameters to prune
     """
     parameters_to_prune = get_params_to_prune(model)
     prune.global_unstructured(
@@ -53,7 +53,7 @@ def random_pruning_model(model, px):
     """ Performs random pruning for mBERT model
     Args:
         model: mBERT model
-        px (float): Pruning rate (a number between 0 and 1)
+        px (float): Pruning rate (a number between 0 and 1) or int number of parameters to prune
     """
     parameters_to_prune = get_params_to_prune(model)
     prune.global_unstructured(
@@ -88,9 +88,47 @@ def see_weight_rate(model):
     for idx in range(12):
         for module_name in ["attention.self.query", "attention.self.key", "attention.self.value",
                             "attention.output.dense", "intermediate.dense", "output.dense"]:
+            sum_list = sum_list + float(eval(f"model.bert.encoder.layer[{idx}].{module_name}.weight_mask.nelement()"))
+            zero_sum = zero_sum +\
+                float(torch.sum(eval(f"model.bert.encoder.layer[{idx}].{module_name}.weight_mask") == 0))
+
+    if model.bert.pooler is not None:
+        sum_list = sum_list + float(model.bert.pooler.dense.weight.nelement())
+        zero_sum = zero_sum + float(torch.sum(model.bert.pooler.dense.weight == 0))
+ 
+    return 100.0 * zero_sum / sum_list
+
+def see_weight_rate(model): 
+    """ Computes the sparsity level of the given mBERT model """
+    sum_list = 0
+    zero_sum = 0
+    if isinstance(model, torch.nn.DataParallel):
+        model = model.module
+    for idx in range(12):
+        for module_name in ["attention.self.query", "attention.self.key", "attention.self.value",
+                            "attention.output.dense", "intermediate.dense", "output.dense"]:
             sum_list = sum_list + float(eval(f"model.bert.encoder.layer[{idx}].{module_name}.weight.nelement()"))
             zero_sum = zero_sum +\
                 float(torch.sum(eval(f"model.bert.encoder.layer[{idx}].{module_name}.weight") == 0))
+
+    if model.bert.pooler is not None:
+        sum_list = sum_list + float(model.bert.pooler.dense.weight.nelement())
+        zero_sum = zero_sum + float(torch.sum(model.bert.pooler.dense.weight == 0))
+ 
+    return 100.0 * zero_sum / sum_list
+
+def see_updated_weight_rate(model): 
+    """ Computes the sparsity level of the given mBERT model """
+    sum_list = 0
+    zero_sum = 0
+    if isinstance(model, torch.nn.DataParallel):
+        model = model.module
+    for idx in range(12):
+        for module_name in ["attention.self.query", "attention.self.key", "attention.self.value",
+                            "attention.output.dense", "intermediate.dense", "output.dense"]:
+            sum_list = sum_list + float(model.state_dict()[f"bert.encoder.layer.{idx}.{module_name}.weight_mask"].nelement())
+            zero_sum = zero_sum +\
+                float((model.state_dict()[f"bert.encoder.layer.{idx}.{module_name}.weight_mask"] == 0).sum().item() )
 
     if model.bert.pooler is not None:
         sum_list = sum_list + float(model.bert.pooler.dense.weight.nelement())
