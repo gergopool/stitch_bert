@@ -5,7 +5,7 @@ from torch.utils.data import TensorDataset, BatchSampler, RandomSampler, DataLoa
 from torchvision import datasets, transforms
 from transformers import glue_processors, glue_output_modes, glue_convert_examples_to_features
 from transformers import AutoTokenizer, DataCollatorForLanguageModeling
-from typing import Any, Iterator, List
+from typing import Iterator, List
 from datasets import load_dataset
 
 from . import Logger
@@ -484,6 +484,7 @@ class CustomBatchSampler(BatchSampler):
 class LimitedDataWrapper(Dataset):
 
     def __init__(self, dataset, n_points=20):
+        assert isinstance(dataset, Dataset), "Input dataset must be a subclass of torch.utils.data.Dataset"
         self.dataset = dataset
         self.n_points = n_points
 

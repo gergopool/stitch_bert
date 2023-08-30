@@ -8,6 +8,9 @@ import torch
 from .static import TASKS
 
 
+from .static import TASKS
+
+
 class Metric(ABC):
     name = "Metric"
 

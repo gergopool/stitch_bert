@@ -4,7 +4,6 @@ from .metrics import Metric
 from torch.utils.data import DataLoader
 from transformers import BertForSequenceClassification as Bert
 from typing import Tuple
-from torch.utils.data import TensorDataset
 
 from .static import GlobalState
 

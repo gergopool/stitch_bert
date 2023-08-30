@@ -1,7 +1,7 @@
 import os
 import argparse
 import torch
-
+from torch.utils.data import DataLoader
 
 # Import custom modules
 from src import Logger, GlobalState

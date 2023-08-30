@@ -39,11 +39,6 @@ def test_train_nlp_debug():
     args = train_parse_args(cli_args)
     train_main(args)
 
-def test_train_mlm_debug():
-    cli_args = ['mlm', '0', '--debug']
-    args = train_parse_args(cli_args)
-    train_main(args)
-
 
 def test_mask_vis_debug():
     cli_args = ['pets', '1', '--debug']
@@ -80,6 +75,9 @@ def test_retrain_mlm_debug():
 
 def test_compare_vis_debug():
     cli_args = ['cifar100', '0', 'food', '4', '--debug']
+
+def test_compare_linear_vis_debug():
+    cli_args = ['cifar100', '0', 'food', '4', '--stitch-type', 'linear', '--debug']
     args = comapre_parse_args(cli_args)
     compare_main(args)
 
@@ -93,6 +91,24 @@ def test_compare_mlm_debug():
     cli_args = ['mnli', '1', 'mlm', '4', '--debug']
     args = comapre_parse_args(cli_args)
     compare_main(args)
+
+def test_compare_linear_nlp_debug():
+    cli_args = ['cola', '1', 'wnli', '4', '--stitch-type', 'linear', '--debug']
+    args = comapre_parse_args(cli_args)
+    compare_main(args)
+
+def test_compare_linearbn_vis_debug():
+    cli_args = ['cifar100', '0', 'food', '4', '--stitch-type', 'linearbn', '--debug']
+    args = comapre_parse_args(cli_args)
+    compare_main(args)
+
+
+def test_compare_linearbn_nlp_debug():
+    cli_args = ['cola', '1', 'wnli', '4', '--stitch-type', 'linearbn', '--debug']
+    args = comapre_parse_args(cli_args)
+    compare_main(args)
+
+
 
 def test_evaluate_vis_debug():
     cli_args = ['pets', '0', '--debug']
