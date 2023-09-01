@@ -6,3 +6,6 @@ numpy
 pytest
 pytest-xdist
 gputil
+apache-beam
+datasets
+pandas

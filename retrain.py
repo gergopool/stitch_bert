@@ -1,12 +1,13 @@
 import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = 'true'
 import argparse
 import torch
-from transformers import AutoTokenizer
 
 # Import custom modules
 from src import Logger, GlobalState
 from src.models import build_pretrained_transformer
-from src.utils import set_seed
+from src.utils import set_seed, set_memory_limit
 from src.metrics import get_metric_for
 from src.trainer import train
 from train import load_datasets
@@ -22,6 +23,7 @@ def main(args):
 
     # Set the random seed for reproducibility
     set_seed(args.seed)
+    set_memory_limit(50)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

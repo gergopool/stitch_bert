@@ -1,11 +1,10 @@
 import os
 import torch
 from torch import nn
-from transformers import AutoModelForSequenceClassification, glue_processors
+from transformers import AutoModelForSequenceClassification, AutoModelForMaskedLM, glue_processors
 from transformers import ViTForImageClassification
 
 from .static import TASKS, N_CLASSES, Logger
-
 
 def build_pretrained_transformer(task_name: str) -> nn.Module:
     """Builds a pretrained transformer model based on the task name.
@@ -16,7 +15,9 @@ def build_pretrained_transformer(task_name: str) -> nn.Module:
     Returns:
         Pretrained model for the given task.
     """
-    if task_name in TASKS['nlp']:
+    if task_name == 'mlm':
+        return AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
+    elif task_name in TASKS['nlp']:
         return _build_nlp_model(task_name)
     else:
         return _build_vision_model(task_name)

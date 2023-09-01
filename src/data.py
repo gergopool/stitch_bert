@@ -4,14 +4,20 @@ from torch import nn
 from torch.utils.data import TensorDataset, BatchSampler, RandomSampler, DataLoader, Dataset
 from torchvision import datasets, transforms
 from transformers import glue_processors, glue_output_modes, glue_convert_examples_to_features
-from transformers import AutoTokenizer
-from typing import Any, Iterator, List
+from transformers import AutoTokenizer, DataCollatorForLanguageModeling
+from typing import Iterator, List
+from datasets import load_dataset
 
 from . import Logger
 from .static import TASKS, GlobalState
 
 IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
+
+# Settings for those datasets that has no train-dev-test split
+SPLIT_MAX_TEST_SIZE = 20000
+SPLIT_MAX_TRAIN_SIZE = 200000
+TEST_SPLIT_RATIO = 0.1
 
 
 def load_data_from_args(args, n_iters: int = None, n_points: int = None, dev=False) -> DataLoader:
@@ -73,6 +79,13 @@ def load_data(task: str,
     # Load dataset
     if task in TASKS['vis']:
         dataset = load_vision_data(data_dir=data_dir, task=task, dev=dev)
+        collate_fn = None
+    elif task == 'mlm':
+        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=True)
+        dataset = load_mlm_data(data_dir=data_dir, 
+                                dev = dev,
+                                max_seq_length=max_seq_length)
+        collate_fn = DataCollatorForLanguageModeling(tokenizer=tokenizer) 
     else:
         root = os.path.join(data_dir, "glue_data")
         dataset = load_glue_data(data_dir=root,
@@ -80,6 +93,7 @@ def load_data(task: str,
                                  dev=dev,
                                  overwrite_cache=overwrite_cache,
                                  max_seq_length=max_seq_length)
+        collate_fn = None
 
     if GlobalState.debug:
         batch_size = 4
@@ -98,14 +112,16 @@ def load_data(task: str,
                                                   batch_sampler=batch_sampler,
                                                   num_workers=8,
                                                   persistent_workers=True,
-                                                  pin_memory=True)
+                                                  pin_memory=True,
+                                                  collate_fn=collate_fn)
     else:
         data_loader = torch.utils.data.DataLoader(dataset,
                                                   shuffle=False,
                                                   batch_size=batch_size,
                                                   num_workers=8,
                                                   persistent_workers=True,
-                                                  pin_memory=True)
+                                                  pin_memory=True,
+                                                  collate_fn=collate_fn)
 
     return data_loader
 
@@ -180,13 +196,112 @@ def load_glue_data(data_dir: str,
     # Convert to Tensors and build dataset
     return build_dataset(features, task)
 
+def load_mlm_data(data_dir: str,
+                  dev: bool = False,
+                  overwrite_cache: bool = False,
+                  max_seq_length: int = 128):
+    """
+    Load and cache examples from Wikipedia dataset.
+
+    Parameters:
+    - data_dir: Directory where the data is located.
+    - dev: Whether to use evaluation data. If False, training data will be used.
+    - overwrite_cache: If True, overwrite the cached data.
+    - max_seq_length: Maximum sequence length for the tokenized data.
+
+    Returns:
+    - Dataset instance containing the cached data.
+    """
+
+    # Determine if to load from cache or from dataset file
+    mode = "dev" if dev else "train"
+
+    # Select task directory
+    save_folder = os.path.join(data_dir, 'wikipedia', '200k_cached')
+    os.makedirs(save_folder, exist_ok=True)
+
+    cached_features_file = os.path.join(save_folder, f"cached_{mode}_{max_seq_length}.pt")
+
+    # Load from cache if possible, otherwise load from dataset
+    dataset = load_from_cache(cached_features_file,
+                               overwrite_cache,
+                               data_dir,
+                               'mlm',
+                               max_seq_length,
+                               dev)
+    return dataset
+
+def load_wiki_data(data_dir: str = "~/.cache/huggingface/datasets",
+                   dev: bool = False,
+                   max_seq_length: int = 128):
+    """
+    Load masked language model (MLM) data.
+
+    Parameters:
+    - data_dir: The directory containing the data.
+    - dev: If True, loads the development (dev) data. Otherwise, loads the training data. Default is False.
+    - max_seq_length: The maximum sequence length for tokenization. Default is 128.
+
+    Returns:
+    - dataset: The loaded dataset in a suitable format for MLM.
+    """
+
+    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=True)
+
+    # Prepare dataset split
+    dataset = load_dataset("wikipedia", "20220301.en", cache_dir=data_dir)['train'] 
+    dataset = dataset.remove_columns(["id", "url","title"])
+    dataset = dataset.shuffle(seed=0)
+    dataset = get_split(dataset, "dev" if dev else "train")
+
+
+    def tokenize(batch):
+        return tokenizer(batch['text'],
+                         padding= 'max_length',
+                         truncation= True,
+                         max_length = max_seq_length)
+    
+    tokenized_dataset = dataset.map(tokenize, batched = True)
+    tokenized_dataset = tokenized_dataset.remove_columns(["text"])
+
+    return tokenized_dataset
+
+
+
+
+def get_split(dataset: Dataset, mode: str) -> Dataset:
+    """
+    Split the dataset into train, validation, and test sets.
+
+    Parameters:
+    - dataset: List of strings representing sentences.
+    - mode: train, dev or test for 
+
+    Returns:
+    - sampler (Subset): Sampler for the training set.
+    """
+ 
+    dataset_length = len(dataset)
+    train_size = min(int(dataset_length * (1 - (2*TEST_SPLIT_RATIO))), SPLIT_MAX_TRAIN_SIZE)
+    test_size = min(int(dataset_length * TEST_SPLIT_RATIO), SPLIT_MAX_TEST_SIZE)
+
+    indices = list(range(dataset_length))
+    if mode == 'train':
+        split_indices = indices[:train_size]
+    elif mode=='dev':
+        split_indices = indices[-2*test_size:-test_size]
+    elif mode=='test':
+        split_indices = indices[-test_size:]
+    
+    sampler = dataset.select(split_indices)
+    return sampler
 
 def load_from_cache(cached_features_file: str,
                     overwrite_cache: bool,
                     data_dir: str,
                     task: str,
                     max_seq_length: int,
-                    dev: bool):
+                    dev: bool) -> list:
     """
     Load features from cache file or dataset.
 
@@ -206,7 +321,10 @@ def load_from_cache(cached_features_file: str,
         features = torch.load(cached_features_file)
     else:
         Logger.info("Creating features from dataset file at %s", data_dir)
-        features = create_features_from_dataset(data_dir, task, max_seq_length, dev)
+        if task == 'mlm':
+            features = load_wiki_data(data_dir, dev, max_seq_length)
+        else:
+            features = create_features_from_dataset(data_dir, task, max_seq_length, dev)
         Logger.info("Saving features into cached file %s", cached_features_file)
         torch.save(features, cached_features_file)
 
@@ -217,7 +335,7 @@ def create_features_from_dataset(data_dir: str,
                                  task: str,
                                  max_seq_length: int,
                                  dev: bool,
-                                 model_type: str = 'bert-base-uncased'):
+                                 model_type: str = 'bert-base-uncased') -> list:
     """
     Create features from dataset.
 
@@ -254,7 +372,7 @@ def create_features_from_dataset(data_dir: str,
     return features
 
 
-def build_dataset(features, task: str):
+def build_dataset(features : list, task: str) -> TensorDataset:
     """
     Build a TensorDataset from features.
 
@@ -366,7 +484,6 @@ class CustomBatchSampler(BatchSampler):
 class LimitedDataWrapper(Dataset):
 
     def __init__(self, dataset, n_points=20):
-        assert isinstance(dataset, Dataset), "Input dataset must be a subclass of torch.utils.data.Dataset"
         self.dataset = dataset
         self.n_points = n_points
 

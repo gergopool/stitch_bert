@@ -8,6 +8,7 @@ from src.static import Logger, GlobalState, TASKS
 from src.models import load_model
 from src.metrics import get_metric_for
 from src.evaluator import evaluate
+from src.utils import set_memory_limit
 
 
 def load_mask(mask_dir: str, task: str, seed: int, device: torch.device) -> torch.Tensor:
@@ -18,6 +19,8 @@ def load_mask(mask_dir: str, task: str, seed: int, device: torch.device) -> torc
 
 
 def main(args):
+
+    set_memory_limit(50)
 
     # Initialize logging and debug mode
     GlobalState.debug = args.debug

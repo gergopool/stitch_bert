@@ -71,16 +71,20 @@ def train(model: nn.Module,
 
     for iter_i, batch in enumerate(data_iter):
         # Prepare input
-        batch = tuple(t.to(device) for t in batch)
-        if is_vis:
-            inputs = {"pixel_values": batch[0], "labels": batch[1]}
+        if hasattr(batch, 'input_ids'):
+            inputs = {key: value.to(device) for key, value in batch.items()}
         else:
-            inputs = {
-                "input_ids": batch[0],
-                "token_type_ids": batch[2],
-                "attention_mask": batch[1],
-                "labels": batch[3]
-            }
+            # Prepare input
+            batch = tuple(t.to(device) for t in batch)
+            if is_vis:
+                inputs = {'pixel_values': batch[0], 'labels': batch[1]}
+            else:
+                inputs = {
+                    "input_ids": batch[0],
+                    "token_type_ids": batch[2],
+                    "attention_mask": batch[1],
+                    "labels": batch[3]
+                }
         if head_mask is not None:
             inputs["head_mask"] = head_mask
 
