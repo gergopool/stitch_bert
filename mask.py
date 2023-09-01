@@ -2,7 +2,6 @@ import os
 import argparse
 import torch
 
-
 # Import custom modules
 from src import Logger, GlobalState
 from src.data import load_data_from_args

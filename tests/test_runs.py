@@ -2,6 +2,16 @@ import GPUtil
 import os
 import pytest
 
+<<<<<<< HEAD
+=======
+from train import parse_args as train_parse_args, main as train_main
+from mask import parse_args as mask_parse_args, main as mask_main
+from retrain import parse_args as retrain_parse_args, main as retrain_main
+from compare import parse_args as comapre_parse_args, main as compare_main
+from evaluate import parse_args as evaluate_parse_args, main as evaluate_main
+
+
+>>>>>>> main
 @pytest.fixture(scope="session", autouse=True)
 def set_gpu_device(pytestconfig):
     """Set the GPU device for each test process, if they are available.
@@ -22,18 +32,25 @@ def set_gpu_device(pytestconfig):
 
 
 def test_train_vis_debug():
+<<<<<<< HEAD
     from train import parse_args as train_parse_args, main as train_main
+=======
+>>>>>>> main
     cli_args = ['cifar10', '0', '--debug']
     args = train_parse_args(cli_args)
     train_main(args)
 
 
 def test_train_nlp_debug():
+<<<<<<< HEAD
     from train import parse_args as train_parse_args, main as train_main
+=======
+>>>>>>> main
     cli_args = ['cola', '0', '--debug']
     args = train_parse_args(cli_args)
     train_main(args)
 
+<<<<<<< HEAD
 def test_train_mlm_debug():
     from train import parse_args as train_parse_args, main as train_main
     cli_args = ['mlm', '0', '--debug']
@@ -43,17 +60,25 @@ def test_train_mlm_debug():
 
 def test_mask_vis_debug():
     from mask import parse_args as mask_parse_args, main as mask_main
+=======
+
+def test_mask_vis_debug():
+>>>>>>> main
     cli_args = ['pets', '1', '--debug']
     args = mask_parse_args(cli_args)
     mask_main(args)
 
 
 def test_mask_nlp_debug():
+<<<<<<< HEAD
     from mask import parse_args as mask_parse_args, main as mask_main
+=======
+>>>>>>> main
     cli_args = ['sst-2', '2', '--debug']
     args = mask_parse_args(cli_args)
     mask_main(args)
 
+<<<<<<< HEAD
 # def test_mask_mlm_debug():
 #     from mask import parse_args as mask_parse_args, main as mask_main
 #     cli_args = ['mlm', '2', '--debug']
@@ -63,17 +88,25 @@ def test_mask_nlp_debug():
 
 def test_retrain_vis_debug():
     from retrain import parse_args as retrain_parse_args, main as retrain_main
+=======
+
+def test_retrain_vis_debug():
+>>>>>>> main
     cli_args = ['flowers', '3', '--debug']
     args = retrain_parse_args(cli_args)
     retrain_main(args)
 
 
 def test_retrain_nlp_debug():
+<<<<<<< HEAD
     from retrain import parse_args as retrain_parse_args, main as retrain_main
+=======
+>>>>>>> main
     cli_args = ['wnli', '4', '--debug']
     args = retrain_parse_args(cli_args)
     retrain_main(args)
 
+<<<<<<< HEAD
 # def test_retrain_mlm_debug():
 #     from retrain import parse_args as retrain_parse_args, main as retrain_main
 #     cli_args = ['mlm', '3', '--debug']
@@ -82,17 +115,25 @@ def test_retrain_nlp_debug():
 
 def test_compare_vis_debug():
     from compare import parse_args as comapre_parse_args, main as compare_main
+=======
+
+def test_compare_vis_debug():
+>>>>>>> main
     cli_args = ['cifar100', '0', 'food', '4', '--debug']
     args = comapre_parse_args(cli_args)
     compare_main(args)
 
 
 def test_compare_nlp_debug():
+<<<<<<< HEAD
     from compare import parse_args as comapre_parse_args, main as compare_main
+=======
+>>>>>>> main
     cli_args = ['cola', '1', 'wnli', '4', '--debug']
     args = comapre_parse_args(cli_args)
     compare_main(args)
 
+<<<<<<< HEAD
 # def test_compare_mlm_debug():
 #     from compare import parse_args as comapre_parse_args, main as compare_main
 #     cli_args = ['mnli', '1', 'mlm', '4', '--debug']
@@ -101,12 +142,16 @@ def test_compare_nlp_debug():
 
 def test_evaluate_vis_debug():
     from evaluate import parse_args as evaluate_parse_args, main as evaluate_main
+=======
+def test_evaluate_vis_debug():
+>>>>>>> main
     cli_args = ['pets', '0', '--debug']
     args = evaluate_parse_args(cli_args)
     evaluate_main(args)
 
 
 def test_evaluate_nlp_debug():
+<<<<<<< HEAD
     from evaluate import parse_args as evaluate_parse_args, main as evaluate_main
     cli_args = ['qqp', '1', '--debug']
     args = evaluate_parse_args(cli_args)
@@ -117,3 +162,8 @@ def test_evaluate_nlp_debug():
 #     cli_args = ['mlm', '1', '--debug']
 #     args = evaluate_parse_args(cli_args)
 #     evaluate_main(args)
+=======
+    cli_args = ['qqp', '1', '--debug']
+    args = evaluate_parse_args(cli_args)
+    evaluate_main(args)
+>>>>>>> main

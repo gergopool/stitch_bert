@@ -85,6 +85,8 @@ def train(model: nn.Module,
                     "attention_mask": batch[1],
                     "labels": batch[3]
                 }
+        if head_mask is not None:
+            inputs["head_mask"] = head_mask.to(device)
             
 
         # Calculate loss
