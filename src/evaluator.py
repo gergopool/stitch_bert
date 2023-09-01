@@ -1,9 +1,9 @@
 import torch
-import numpy as np
 from .metrics import Metric
 from torch.utils.data import DataLoader
 from transformers import BertForSequenceClassification as Bert
-from typing import Tuple
+
+from copy import deepcopy
 
 from .static import GlobalState
 
@@ -82,4 +82,4 @@ def evaluate(model: Bert,
     # Set model back to trainable
     model.train(was_model_trainable)
 
-    return metric.value
+    return deepcopy(metric.value)
