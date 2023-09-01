@@ -61,7 +61,10 @@ def compare_in_tasks(task1: str, seed1: int, task2: str, seed2: int) -> str:
     stop_criteria2 = ((seed1 + 1) % 5) != (seed2 % 5)
     if stop_criteria1 or stop_criteria2:
         return None
-    return f"python compare.py {task1} {seed1} {task2} {seed2}"
+    return [
+        f"python compare.py {task1} {seed1} {task2} {seed2} --stitch-type linear",
+        f"python compare.py {task1} {seed1} {task2} {seed2} --stitch-type linearbn"
+    ]
 
 
 def compare_across_tasks(task1: str, seed1: int, task2: str, seed2: int) -> str:
@@ -70,7 +73,20 @@ def compare_across_tasks(task1: str, seed1: int, task2: str, seed2: int) -> str:
     stop_criteria3 = (seed1 != 0) or (seed2 != 0)
     if stop_criteria1 or stop_criteria2 or stop_criteria3:
         return None
-    return f"python compare.py {task1} {seed1} {task2} {seed2}"
+    return [
+        f"python compare.py {task1} {seed1} {task2} {seed2} --stitch-type linear",
+        f"python compare.py {task1} {seed1} {task2} {seed2} --stitch-type linearbn"
+    ]
+
+
+def flatten(lst):
+    def flat_gen(l):
+        for x in l:
+            if isinstance(x, list):
+                yield from flat_gen(x)
+            else:
+                yield x
+    return list(flat_gen(lst))
 
 
 def main(args):
@@ -81,7 +97,7 @@ def main(args):
         keys, values = zip(*options.items())
         tasks = [dict(zip(keys, v)) for v in itertools.product(*values)]
         tasks = [globals()[config](**inputs) for inputs in tasks]
-        tasks = [t for t in tasks if t is not None]
+        tasks = flatten([t for t in tasks if t is not None])
 
         os.makedirs(args.out_dir, exist_ok=True)
         tasks_file = os.path.join(args.out_dir, f"{config}.tasks")

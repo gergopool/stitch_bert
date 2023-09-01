@@ -6,7 +6,7 @@ import pickle
 from typing import Tuple, Dict, Union, List
 from torch.utils.data import DataLoader
 
-from src.utils import set_seed
+from src.utils import set_seed, set_memory_limit
 from src.static import Logger, GlobalState, TASKS
 from src.compare import cka, jaccard_similarity, functional_similarity, calculate_embeddings
 from src.models import load_model
@@ -67,7 +67,8 @@ def calculate_layer_similarities(model_info: Dict[str, Union[nn.Module, torch.Te
                                  metric: Metric,
                                  n_points,
                                  is_vis: bool,
-                                 device: torch.device) -> Tuple[float, float, float]:
+                                 device: torch.device,
+                                 stitch_type: str) -> Tuple[float, float, float]:
     """
     Calculate similarities for a specific layer.
 
@@ -82,6 +83,7 @@ def calculate_layer_similarities(model_info: Dict[str, Union[nn.Module, torch.Te
         n_points: Number of points to use for CKA and PS_inv.
         is_vis: Flag indicating whether it's a visual task.
         device: PyTorch device.
+        stitch_type: Type of transformation the stitchin should use: ['linear', 'linearbn']
 
     Returns:
         Jaccard, CKA and functional similarity for the given layer, respectively.
@@ -113,7 +115,8 @@ def calculate_layer_similarities(model_info: Dict[str, Union[nn.Module, torch.Te
                                        model2_performance=model2_performance,
                                        metric=metric,
                                        is_vis=is_vis,
-                                       device=device)
+                                       device=device,
+                                       trans_type=stitch_type)
     Logger.info(f"FS @ {layer_i+1} : {current_fs:.3f}.")
 
     return current_jaccard, current_cka, current_fs
@@ -155,7 +158,8 @@ def calculate_similarities(args,
             metric=metric,
             n_points=args.n_points,
             is_vis=is_vis,
-            device=device)
+            device=device,
+            stitch_type=args.stitch_type)
         results['jaccard'].append(current_jaccard)
         results['cka'].append(current_cka)
         results['fs'].append(current_fs)
@@ -172,9 +176,9 @@ def save_results(args, results: Dict[str, List[float]]):
         results: Dictionary containing the calculated similarities.
     """
     if not GlobalState.debug:
-        os.makedirs(args.out_dir, exist_ok=True)
-        save_path = os.path.join(args.out_dir,
-                                 f"{args.task1}_{args.seed1}_{args.task2}_{args.seed2}.pkl")
+        out_dir = os.path.join(args.out_dir, args.stitch_type)
+        os.makedirs(out_dir, exist_ok=True)
+        save_path = os.path.join(out_dir, f"{args.task1}_{args.seed1}_{args.task2}_{args.seed2}.pkl")
         with open(save_path, 'wb') as f:
             pickle.dump(results, f)
         Logger.info(f"Results saved to {save_path}.")
@@ -189,6 +193,7 @@ def main(args):
     Logger.initialise(args.debug)
 
     set_seed(args.run_seed)
+    set_memory_limit(50)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     train_loader, val_loader = load_data_loaders(args)
     model_info = load_models_and_masks(args, device)
@@ -211,6 +216,11 @@ def parse_args(cli_args=None):
                         choices=TASKS['vis'] + TASKS['nlp'],
                         help="Name of the task (dataset).")
     parser.add_argument("seed2", type=int, help="The seed of the second run, for reproducibility.")
+    parser.add_argument("--stitch-type",
+                        type=str,
+                        default='linear',
+                        choices=['linear', 'linearbn'],
+                        help="How to stitch: with or without batchnorm.")
     parser.add_argument("--data_dir",
                         type=str,
                         default='/data/shared/data/',
@@ -221,16 +231,16 @@ def parse_args(cli_args=None):
                         help="Maximum sequence length for the tokenized data. Default is 128.")
     parser.add_argument("--n_iterations",
                         type=int,
-                        default=1000,
-                        help="Number of training iterations. Default is 200.")
+                        default=2000,
+                        help="Number of training iterations. Default is 2000.")
     parser.add_argument("--n_points",
                         type=int,
-                        default=1000,
-                        help="Number datapoints to take for cka and ps_inv. Default is 10000.")
+                        default=2000,
+                        help="Number datapoints to take for cka and ps_inv. Default is 2000.")
     parser.add_argument("--batch_size",
                         type=int,
-                        default=32,
-                        help="Batch size for training. Default is 32.")
+                        default=128,
+                        help="Batch size for training. Default is 128.")
     parser.add_argument("--run_seed",
                         type=str,
                         default=42,

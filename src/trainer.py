@@ -86,8 +86,7 @@ def train(model: nn.Module,
                     "labels": batch[3]
                 }
         if head_mask is not None:
-            inputs["head_mask"] = head_mask.to(device)
-            
+            inputs["head_mask"] = head_mask
 
         # Calculate loss
         if GlobalState.debug:

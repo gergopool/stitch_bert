@@ -8,3 +8,7 @@ pytest-xdist
 gputil
 apache-beam
 datasets
+<<<<<<< HEAD
+=======
+pandas
+>>>>>>> temp
