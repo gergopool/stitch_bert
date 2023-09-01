@@ -7,7 +7,7 @@ import torch
 # Import custom modules
 from src.data import load_data_from_args
 from src.models import build_pretrained_transformer
-from src.utils import set_seed
+from src.utils import set_seed, set_memory_limit
 from src.metrics import get_metric_for
 from src.trainer import train
 from src import Logger, GlobalState, TASKS
@@ -22,6 +22,8 @@ def load_datasets(args):
 
 
 def main(args):
+
+    set_memory_limit(50)
 
     # Initialize logging and debug mode
     GlobalState.debug = args.debug

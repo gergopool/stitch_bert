@@ -5,10 +5,12 @@ from torch.utils.data import DataLoader
 from torch import nn
 from typing import Tuple
 from .static import Logger, GlobalState
+from .metrics import Metric
 
 
 def compute_heads_importance(
         model: nn.Module,
+        metric : Metric,
         data_loader: DataLoader,
         is_vis: bool = False,
         head_mask: torch.tensor = None) -> Tuple[torch.tensor, np.array, np.array]:
@@ -35,7 +37,7 @@ def compute_heads_importance(
     head_mask = head_mask.to(device)
     head_mask.requires_grad_(True)
 
-    preds, labels = [], []
+    metric.reset()
 
     fake_opt = torch.optim.Adam([head_mask] + list(model.parameters()), lr=0.0)
 
@@ -60,8 +62,7 @@ def compute_heads_importance(
         loss.backward()
         head_importance += head_mask.grad.abs().detach()
 
-        preds.append(logits.detach().cpu())
-        labels.append(inputs['labels'].detach().cpu())
+        metric.accumulate(logits.detach().cpu().numpy(), inputs['labels'].detach().cpu().numpy())
 
         if GlobalState.debug and iter_i >= 2:
             Logger.info("Breaking the loop for debug purposes.")
@@ -70,10 +71,7 @@ def compute_heads_importance(
     # Normalize the importance over layers
     head_importance = torch.nn.functional.normalize(head_importance, p=2, dim=-1)
 
-    all_preds = torch.cat(preds, dim=0).numpy()
-    all_labels = torch.cat(labels, dim=0).numpy()
-
-    return head_importance, all_preds, all_labels
+    return head_importance, metric.value
 
 
 def mask_heads(model: nn.Module,
@@ -97,8 +95,7 @@ def mask_heads(model: nn.Module,
         The binary mask for the heads.
     """
     # Compute importance scores
-    head_importance, preds, labels = compute_heads_importance(model, eval_dataloader, is_vis)
-    original_score = metric(preds, labels)
+    head_importance, original_score = compute_heads_importance(model, metric, eval_dataloader, is_vis)
     stop_at = original_score * threshold
     Logger.info(f"Pruning: original score: {original_score:.2f}, threshold: {stop_at:.2f}")
 
@@ -131,9 +128,8 @@ def mask_heads(model: nn.Module,
             head_idx = head.item() % model.config.num_attention_heads
             new_head_mask[layer_idx][head_idx] = 0.0
 
-        head_importance, preds, labels = compute_heads_importance(
-            model, eval_dataloader, is_vis, head_mask=new_head_mask)
-        current_score = metric(preds, labels)
+        head_importance, current_score = compute_heads_importance(
+            model, metric, eval_dataloader, is_vis, head_mask=new_head_mask)
         performance_meter = current_score / original_score * 100.
         orig_size = new_head_mask.numel()
         new_size = int(new_head_mask.sum())

@@ -6,7 +6,7 @@ import pickle
 from typing import Tuple, Dict, Union, List
 from torch.utils.data import DataLoader
 
-from src.utils import set_seed
+from src.utils import set_seed, set_memory_limit
 from src.static import Logger, GlobalState, TASKS
 from src.compare import cka, jaccard_similarity, functional_similarity, calculate_embeddings
 from src.models import load_model
@@ -193,6 +193,7 @@ def main(args):
     Logger.initialise(args.debug)
 
     set_seed(args.run_seed)
+    set_memory_limit(50)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     train_loader, val_loader = load_data_loaders(args)
     model_info = load_models_and_masks(args, device)

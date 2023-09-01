@@ -8,29 +8,36 @@ from typing import Tuple
 from .static import GlobalState
 
 
-def predict(model: Bert,
-            data_loader: DataLoader,
-            mask: torch.Tensor = None,
-            is_vis: bool = False) -> Tuple[np.array, np.array]:
+    
+
+
+def evaluate(model: Bert,
+             data_loader: DataLoader,
+             metric: Metric,
+             is_vis: bool = False,
+             mask: torch.tensor = None) -> float:
     """
-    Run the model on the data loader and return the predictions and labels.
+    Evaluate the model on the data loader using the provided metric.
 
     Args:
         model: The Bert model.
         data_loader: The DataLoader object.
-        mask: The mask tensor.
+        metric: The Metric object to be used for evaluation.
         is_vis: If True, we assume it is a vision task.
+        mask: The mask tensor.
 
     Returns:
-        A tuple of numpy arrays for predictions and labels.
+        The evaluation score.
     """
-
     # Get device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Set model trainable
     was_model_trainable = model.training
     model.eval().to(device)
+
+    # Reset metric running parameters
+    metric.reset()
 
     # Prepare mask
     mask = None if mask is None else mask.clone().detach().to(device)
@@ -65,40 +72,14 @@ def predict(model: Bert,
                     outputs = model(**inputs)
 
         # Get predictions
-        preds.append(outputs[1].cpu().detach())
-        labels.append(inputs['labels'].cpu().detach())
+        metric.accumulate(outputs[1].cpu().detach().numpy(),
+                          inputs['labels'].cpu().detach().numpy())
 
         # Quit after three iterations in debug mode
         if GlobalState.debug and iter_i >= 2:
             break
 
-    # Concatenate predictions and labels
-    preds = torch.cat(preds, dim=0).numpy()
-    labels = torch.cat(labels, dim=0).numpy()
-
     # Set model back to trainable
     model.train(was_model_trainable)
 
-    return preds, labels
-
-
-def evaluate(model: Bert,
-             data_loader: DataLoader,
-             metric: Metric,
-             is_vis: bool = False,
-             mask: torch.tensor = None) -> float:
-    """
-    Evaluate the model on the data loader using the provided metric.
-
-    Args:
-        model: The Bert model.
-        data_loader: The DataLoader object.
-        metric: The Metric object to be used for evaluation.
-        is_vis: If True, we assume it is a vision task.
-        mask: The mask tensor.
-
-    Returns:
-        The evaluation score.
-    """
-    preds, labels = predict(model, data_loader, is_vis=is_vis, mask=mask)
-    return metric(preds, labels)
+    return metric.value

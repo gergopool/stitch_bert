@@ -10,8 +10,11 @@ from src.models import load_model
 from src.metrics import get_metric_for
 from src.mask_utils import mask_heads
 from src.static import TASKS
+from src.utils import set_memory_limit
 
 def main(args):
+
+    set_memory_limit(50)
 
     # Initialize logging and debug mode
     GlobalState.debug = args.debug
