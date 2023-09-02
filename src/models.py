@@ -3,9 +3,10 @@ import torch
 from torch import nn
 from transformers import AutoModelForSequenceClassification, glue_processors
 from transformers import ViTForImageClassification
+from src.magnitude_pruning import MAGNITUDE_PRUNING_GLOBAL, MAGNITUDE_PRUNING_COMPONENT_WISE, RANDOM_PRUNING
 
 from .static import TASKS, N_CLASSES, Logger
-
+from src.magnitude_pruning import pruning_model
 
 def build_pretrained_transformer(task_name: str) -> nn.Module:
     """Builds a pretrained transformer model based on the task name.
@@ -35,7 +36,7 @@ def _build_vision_model(task_name: str) -> nn.Module:
     return ViTForImageClassification.from_pretrained("facebook/dino-vitb16", num_labels=n_classes)
 
 
-def load_model(model_root: str, task: str, seed: int, device: torch.device) -> nn.Module:
+def load_model(model_root: str, task: str, seed: int, device: torch.device, pruning_method: str) -> nn.Module:
     """Loads a pretrained model for a given task.
 
     Args:
@@ -47,8 +48,13 @@ def load_model(model_root: str, task: str, seed: int, device: torch.device) -> n
     Returns:
         Pretrained model for the given task.
     """
-    model_path = os.path.join(model_root, f"{task}_{seed}.pt")
+    postfix_for_pruning =  f'_{pruning_method}' if pruning_method in \
+                            [MAGNITUDE_PRUNING_GLOBAL, MAGNITUDE_PRUNING_COMPONENT_WISE, RANDOM_PRUNING] else ''
+    model_path = os.path.join(model_root, f"{task}_{seed}{postfix_for_pruning}.pt")
     model = build_pretrained_transformer(task)
+    if pruning_method in [MAGNITUDE_PRUNING_GLOBAL, MAGNITUDE_PRUNING_COMPONENT_WISE, RANDOM_PRUNING]:
+        pruning_model(model,0) # hack to add the wanted modules see see https://discuss.pytorch.org/t/proper-way-to-load-a-pruned-network/77694
+
     model.load_state_dict(torch.load(model_path, map_location=device))
     Logger.info(f"Model loaded from file {model_path}.")
     return model

@@ -9,15 +9,16 @@ from torch.utils.data import DataLoader
 from src.utils import set_seed
 from src.static import Logger, GlobalState, TASKS
 from src.compare import cka, jaccard_similarity, functional_similarity, calculate_embeddings
-from src.analysis_tools import jaccard_for_magnitude_pruning
+from src.compare.jaccard_for_magnitude_pruning import jaccard_for_magnitude_pruning
 from src.models import load_model
 from src.metrics import get_metric_for, Metric
 from src.evaluator import evaluate
 from src.data import load_data_from_args
-
+from src.magnitude_pruning import MAGNITUDE_PRUNING_GLOBAL, MAGNITUDE_PRUNING_COMPONENT_WISE, RANDOM_PRUNING
 
 def load_mask(mask_dir: str, task: str, seed: int, device: torch.device, pruning_method: str) -> torch.Tensor:
-    postfix_for_pruning = '' if pruning_method =='structured' else f'_{pruning_method}'
+    postfix_for_pruning =  f'_{pruning_method}' if pruning_method in \
+                            [MAGNITUDE_PRUNING_GLOBAL, MAGNITUDE_PRUNING_COMPONENT_WISE, RANDOM_PRUNING] else ''
     mask_path = os.path.join(mask_dir, f"{task}_{seed}{postfix_for_pruning}.pt")
     head_mask = torch.load(mask_path, map_location=device)
     Logger.info(f"Loaded mask from file {mask_path}.")
@@ -53,8 +54,8 @@ def load_models_and_masks(args, device: torch.device, pruning_method: str) -> Di
         Dictionary containing the loaded models and masks.
     """
     model_info = {
-        "model1": load_model(args.retrain_dir, args.task1, args.seed1, device),
-        "model2": load_model(args.retrain_dir, args.task2, args.seed2, device),
+        "model1": load_model(args.retrain_dir, args.task1, args.seed1, device, pruning_method),
+        "model2": load_model(args.retrain_dir, args.task2, args.seed2, device, pruning_method),
         "mask1": load_mask(args.mask_dir, args.task1, args.seed1, device, pruning_method),
         "mask2": load_mask(args.mask_dir, args.task2, args.seed2, device, pruning_method)
     }
@@ -90,8 +91,11 @@ def calculate_layer_similarities(model_info: Dict[str, Union[nn.Module, torch.Te
         Jaccard, CKA and functional similarity for the given layer, respectively.
     """
     # Get jaccard similarity
-    if pruning_method == 'magnitude_uniform' or pruning_method =='magnitude_all':
+    if pruning_method  in [MAGNITUDE_PRUNING_GLOBAL, MAGNITUDE_PRUNING_COMPONENT_WISE, RANDOM_PRUNING]:
         current_jaccard = jaccard_for_magnitude_pruning(model_info['mask1'], model_info["mask2"], layer_i + 1)
+        # they are not head mask so they can be removed 
+        model_info['mask1'] = None
+        model_info["mask2"] = None
     elif pruning_method == 'structured': 
         current_jaccard = jaccard_similarity(model_info['mask1'][:layer_i + 1],
                                          model_info["mask2"][:layer_i + 1])
@@ -252,7 +256,8 @@ def parse_args(cli_args=None):
                         type=str,
                         default='results/retrained/',
                         help="Directory which contains the retrained models. " + \
-                             "Default is 'results/retrained/'.")
+                             "Default is 'results/retrained/'. \
+                              For iterative magnitude pruning use the finetune directory 'results/finetune/' ")
     parser.add_argument("--mask_dir",
                         type=str,
                         default='results/masks/',
@@ -264,11 +269,17 @@ def parse_args(cli_args=None):
     parser.add_argument("--debug", action='store_true', help="Run in debug mode. Default is False.")
     parser.add_argument("--pruning_method ",
                         type=str,
-                        choices=['structured',  'magnitude_all'],
-                        #todo magnitude_uniform
-                        help="magnitude_uniform cuts the same percentage from all matrices, magnitude_all ")
+                        choices=['structured', MAGNITUDE_PRUNING_GLOBAL, MAGNITUDE_PRUNING_COMPONENT_WISE, RANDOM_PRUNING],
+                        )
     # Parse the arguments
-    args = parser.parse_args(cli_args)
+    args = parser.parse_args()
+    args.task1 = 'cola'
+    args.task2 = 'cola'
+    args.seed1 = 0
+    args.seed2 = 0
+    args.debug = True
+    args.pruning_method = MAGNITUDE_PRUNING_GLOBAL
+    args.retrain_dir = 'results/finetune/'
 
     return args
 

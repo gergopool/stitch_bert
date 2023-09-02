@@ -5,6 +5,10 @@
 import torch.nn.utils.prune as prune
 import torch
 
+MAGNITUDE_PRUNING_COMPONENT_WISE = "magnitude_pruning_component_wise" # p% from every module
+MAGNITUDE_PRUNING_GLOBAL = "magnitude_pruning_global" # p% overall from all all parameters based on the weight norm
+RANDOM_PRUNING = 'random_pruning' # p% overall from all all parameters randomly
+
 def get_params_to_prune(model_to_prune):
     """ Returns the parameters we want to prune for mBERT model """
     parameters_to_prune = []
@@ -71,9 +75,9 @@ def see_weight_rate(model):
     for idx in range(12):
         for module_name in ["attention.self.query", "attention.self.key", "attention.self.value",
                             "attention.output.dense", "intermediate.dense", "output.dense"]:
-            sum_list = sum_list + float(eval(f"model.bert.encoder.layer[{idx}].{module_name}.weight_mask.nelement()"))
+            sum_list = sum_list + float(eval(f"model.bert.encoder.layer[{idx}].{module_name}.weight.nelement()"))
             zero_sum = zero_sum +\
-                float(torch.sum(eval(f"model.bert.encoder.layer[{idx}].{module_name}.weight_mask") == 0))
+                float(torch.sum(eval(f"model.bert.encoder.layer[{idx}].{module_name}.weight") == 0))
 
     if model.bert.pooler is not None:
         sum_list = sum_list + float(model.bert.pooler.dense.weight.nelement())
@@ -81,21 +85,78 @@ def see_weight_rate(model):
  
     return 100.0 * zero_sum / sum_list
 
-def see_updated_weight_rate(model): 
-    """ Computes the sparsity level of the given mBERT model """
-    sum_list = 0
-    zero_sum = 0
-    if isinstance(model, torch.nn.DataParallel):
-        model = model.module
-    for idx in range(12):
+def rewind(pre_weight):
+
+    recover_dict = {}
+    name_list = []
+    for ii in range(12):
+        name_list.append('bert.encoder.layer.'+str(ii)+'.attention.self.query.weight')
+        name_list.append('bert.encoder.layer.'+str(ii)+'.attention.self.key.weight')
+        name_list.append('bert.encoder.layer.'+str(ii)+'.attention.self.value.weight')
+        name_list.append('bert.encoder.layer.'+str(ii)+'.attention.output.dense.weight')
+        name_list.append('bert.encoder.layer.'+str(ii)+'.intermediate.dense.weight')
+        name_list.append('bert.encoder.layer.'+str(ii)+'.output.dense.weight')
+    name_list.append('bert.pooler.dense.weight')
+
+    for key in pre_weight.keys():
+
+        if 'bert' in key:
+            if key in name_list:
+                new_key = key+'_orig'
+            else:
+                new_key = key
+
+            recover_dict[new_key] = pre_weight[key]
+
+    return recover_dict
+
+def get_mbert_mask_ones_overlap(mask_list):
+    """ Computes number of active neurons of two pruned masks. """
+    total_similarity = 0
+    total_size = 0
+    all_layers_similarity = []
+    for ii in range(12):
+        layer_similarity = 0
+        layer_size = 0
+
         for module_name in ["attention.self.query", "attention.self.key", "attention.self.value",
                             "attention.output.dense", "intermediate.dense", "output.dense"]:
-            sum_list = sum_list + float(model.state_dict()[f"bert.encoder.layer.{idx}.{module_name}.weight_mask"].nelement())
-            zero_sum = zero_sum +\
-                float((model.state_dict()[f"bert.encoder.layer.{idx}.{module_name}.weight_mask"] == 0).sum().item() )
+            data_list = []
+            for mask_dict in mask_list:
+                data_list.append(mask_dict[f'bert.encoder.layer.{ii}.{module_name}.weight_mask'])
+            result = torch.stack(data_list, dim=0).sum(dim=0)
+            layer_size += len(result[result != 0])
+            layer_similarity += len(result[result == len(mask_list)])
 
-    if model.bert.pooler is not None:
-        sum_list = sum_list + float(model.bert.pooler.dense.weight.nelement())
-        zero_sum = zero_sum + float(torch.sum(model.bert.pooler.dense.weight == 0))
- 
-    return 100.0 * zero_sum / sum_list
+        total_similarity += layer_similarity
+        total_size += layer_size
+        similarity = float(layer_similarity / layer_size)
+        # print("Layer: {}, similarity rate: {:.4f}".format(ii, similarity))
+        all_layers_similarity.append(similarity)
+
+    if "bert.pooler.dense.weight_mask" in mask_list[0]:
+        data_list = []
+        for mask_dict in mask_list:
+            data_list.append(mask_dict['bert.pooler.dense.weight_mask'])
+        result = torch.stack(data_list, dim=0).sum(dim=0)
+        layer_size += len(result[result != 0])
+        layer_similarity += len(result[result == len(mask_list)])
+
+        total_similarity += layer_similarity
+        total_size += layer_size
+
+    print("Total similarity rate: {:.4f}".format(float(total_similarity / total_size)))
+    return all_layers_similarity
+
+
+def see_mask_zero_rate(mask_dict):
+    """ Compute the percenrage of the pruned neurons using the given mask (mBERT). """
+    
+    total_size = 0.0
+    zero_size = 0.0
+    for key in list(mask_dict.keys()):
+        total_size += float(mask_dict[key].nelement())
+        zero_size += float(torch.sum(mask_dict[key] == 0))
+
+    zero_rate = (100 * zero_size) / total_size
+    return zero_rate

@@ -82,9 +82,9 @@ class StitchNet(nn.Module):
                  device: torch.device):
         super().__init__()
         self.model1 = model1.eval().to(device)
-        self.model2 = model2.eval().to(device)
-        self.mask1 = mask1.to(device)
-        self.mask2 = mask2.to(device)
+        self.model2 = model2.eval().to(device) 
+        self.mask1 = mask1.to(device) if mask1 is not None else None
+        self.mask2 = mask2.to(device) if mask2 is not None else None
         self.layer_idx = layer_idx
         self.hidden_size = self.model1.config.hidden_size
         self.n_heads = self.model1.config.num_attention_heads

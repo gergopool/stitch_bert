@@ -77,10 +77,12 @@ def calculate_embeddings(model1: nn.Module,
     """
 
     # Move models and masks to the given device and set them to evaluation mode
-    model1 = model1.eval().to(device)
+    model1 = model1.eval().to(device) 
     model2 = model2.eval().to(device)
-    mask1 = mask1.to(device)
-    mask2 = mask2.to(device)
+    if mask1 is not None:
+        mask1 = mask1.to(device)
+    if mask2 is not None:
+        mask2 = mask2.to(device)
 
     # Collect activations from forward passes
     act1, act2 = [], []
