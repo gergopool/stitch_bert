@@ -8,9 +8,11 @@ from src.models import build_pretrained_transformer
 from src.utils import set_seed
 from src.metrics import get_metric_for
 from src.trainer import train
+from src.models import load_model
 from src import Logger, GlobalState, TASKS
 from src.magnitude_pruning import rewind, MAGNITUDE_PRUNING_COMPONENT_WISE, MAGNITUDE_PRUNING_GLOBAL, RANDOM_PRUNING
 from src.trainer import iterative_magnitude_pruning
+from src.evaluator import evaluate
 import pandas as pd
 from train import load_datasets
 
@@ -44,8 +46,10 @@ def main(args):
     # see https://github.com/VITA-Group/BERT-Tickets/blob/master/LT_glue.py#L788
     origin_model_dict  = rewind(model.state_dict()) # create new model to avoid the problem
 
-    # get the finetuned_result_from_csv(args)
-    finetuned_best_metric = finetuned_result_from_csv(args)
+    # get the finetuned result
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    trained_model = load_model(args.train_dir, args.task, args.seed, device, pruning_method=args.pruning_method)
+    finetuned_best_metric = evaluate(trained_model, val_loader, metric, is_vis = args.task in TASKS['vis'], mask=None)
 
     magnitude_pruning_type = f'_{args.pruning_method}'
 
@@ -120,6 +124,11 @@ def parse_args(cli_args=None):
                         type=str,
                         default='./evaluation.csv',
                         help="Directory where the finetuned results are written")
+    parser.add_argument("--train_dir",
+                        type=str,
+                        default='results/finetune/',
+                        help="Directory which contains the finetuned models. " + \
+                             "Default is 'results/finetune/'.")
     # Parse the arguments
     args = parser.parse_args(cli_args)
 
