@@ -2,6 +2,7 @@
 results/
 tasks/*.done
 tasks/*/*.out
+save/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
