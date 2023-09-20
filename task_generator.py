@@ -11,32 +11,29 @@ import os
 
 from src import TASKS
 
+simple_task = {
+    "task": TASKS['nlp'] + TASKS['vis'], "seed": [i for i in range(5)]
+}
+evaluate_task = {
+    "task": TASKS['nlp'] + TASKS['vis'],
+    "seed": [i for i in range(5)],
+}
+compare_task = {
+    "task1": TASKS['nlp'] + TASKS['vis'],
+    "seed1": [i for i in range(5)],
+    "task2": TASKS['nlp'] + TASKS['vis'],
+    "seed2": [i for i in range(5)],
+}
+
 CONFIGS = {
-    "train": {
-        "task": TASKS['nlp'] + TASKS['vis'], "seed": [i for i in range(5)]
-    },
-    "mask": {
-        "task": TASKS['nlp'] + TASKS['vis'], "seed": [i for i in range(5)]
-    },
-    "retrain": {
-        "task": TASKS['nlp'] + TASKS['vis'], "seed": [i for i in range(5)]
-    },
-    "compare_in_tasks": {
-        "task1": TASKS['nlp'] + TASKS['vis'],
-        "seed1": [i for i in range(5)],
-        "task2": TASKS['nlp'] + TASKS['vis'],
-        "seed2": [i for i in range(5)],
-    },
-    "compare_across_tasks": {
-        "task1": TASKS['nlp'] + TASKS['vis'],
-        "seed1": [i for i in range(5)],
-        "task2": TASKS['nlp'] + TASKS['vis'],
-        "seed2": [i for i in range(5)],
-    },
-    "evaluate": {
-        "task": TASKS['nlp'] + TASKS['vis'],
-        "seed": [i for i in range(5)],
-    }
+    "train": simple_task,
+    "mask": simple_task,
+    "retrain": simple_task,
+    "compare_in_tasks": compare_task,
+    "compare_across_tasks": compare_task,
+    "evaluate": evaluate_task,
+    "shuffle_mask1": compare_task,
+    "shuffle_mask2": compare_task
 }
 
 
@@ -61,10 +58,7 @@ def compare_in_tasks(task1: str, seed1: int, task2: str, seed2: int) -> str:
     stop_criteria2 = ((seed1 + 1) % 5) != (seed2 % 5)
     if stop_criteria1 or stop_criteria2:
         return None
-    return [
-        f"python compare.py {task1} {seed1} {task2} {seed2} --stitch-type linear",
-        f"python compare.py {task1} {seed1} {task2} {seed2} --stitch-type linearbn"
-    ]
+    return f"python compare.py {task1} {seed1} {task2} {seed2} --stitch-type linear"
 
 
 def compare_across_tasks(task1: str, seed1: int, task2: str, seed2: int) -> str:
@@ -73,10 +67,20 @@ def compare_across_tasks(task1: str, seed1: int, task2: str, seed2: int) -> str:
     stop_criteria3 = (seed1 != 0) or (seed2 != 0)
     if stop_criteria1 or stop_criteria2 or stop_criteria3:
         return None
-    return [
-        f"python compare.py {task1} {seed1} {task2} {seed2} --stitch-type linear",
-        f"python compare.py {task1} {seed1} {task2} {seed2} --stitch-type linearbn"
-    ]
+    return f"python compare.py {task1} {seed1} {task2} {seed2} --stitch-type linear"
+
+
+def shuffle_mask1(*args, **kwargs) -> str:
+    task = compare_in_tasks(*args, **kwargs)
+    if task is None:
+        return None
+    return task.strip() + " --shuffle_mask1 --out_dir results/shuffle_mask1/"
+
+def shuffle_mask2(*args, **kwargs) -> str:
+    task = compare_in_tasks(*args, **kwargs)
+    if task is None:
+        return None
+    return task.strip() + " --shuffle_mask2 --out_dir results/shuffle_mask2/"
 
 
 def flatten(lst):

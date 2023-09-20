@@ -110,7 +110,7 @@ def load_data(task: str,
                                            drop_last=not dev)
         data_loader = torch.utils.data.DataLoader(dataset,
                                                   batch_sampler=batch_sampler,
-                                                  num_workers=8,
+                                                  num_workers=4,
                                                   persistent_workers=True,
                                                   pin_memory=True,
                                                   collate_fn=collate_fn)
@@ -118,7 +118,7 @@ def load_data(task: str,
         data_loader = torch.utils.data.DataLoader(dataset,
                                                   shuffle=False,
                                                   batch_size=batch_size,
-                                                  num_workers=8,
+                                                  num_workers=4,
                                                   persistent_workers=True,
                                                   pin_memory=True,
                                                   collate_fn=collate_fn)

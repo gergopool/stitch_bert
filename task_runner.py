@@ -23,7 +23,7 @@ def parse_args(cli_args=None):
                         required=False)
     parser.add_argument('-l',
                         '--log-dir',
-                        default=None,
+                        default="tasks/logs",
                         help='If None no log wil be created',
                         required=False)
     return parser.parse_args(cli_args)
