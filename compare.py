@@ -14,11 +14,23 @@ from src.metrics import get_metric_for, Metric
 from src.evaluator import evaluate
 from src.data import load_data_from_args
 
+def randomize_mask(mask: torch.Tensor) -> torch.Tensor:
+    mask = mask.T
+    for i, row in enumerate(mask):
+        mask[i] = row[torch.randperm(len(row))]
+    return mask.T
 
-def load_mask(mask_dir: str, task: str, seed: int, device: torch.device) -> torch.Tensor:
+
+def load_mask(mask_dir: str,
+              task: str,
+              seed: int,
+              device: torch.device,
+              randomize: bool = False) -> torch.Tensor:
     mask_path = os.path.join(mask_dir, f"{task}_{seed}.pt")
     head_mask = torch.load(mask_path, map_location=device)
     Logger.info(f"Loaded mask from file {mask_path}.")
+    if randomize:
+        head_mask = randomize_mask(head_mask)
     return head_mask
 
 
@@ -51,10 +63,10 @@ def load_models_and_masks(args, device: torch.device) -> Dict[str, Union[nn.Modu
         Dictionary containing the loaded models and masks.
     """
     model_info = {
-        "model1": load_model(args.retrain_dir, args.task1, args.seed1, device),
-        "model2": load_model(args.retrain_dir, args.task2, args.seed2, device),
-        "mask1": load_mask(args.mask_dir, args.task1, args.seed1, device),
-        "mask2": load_mask(args.mask_dir, args.task2, args.seed2, device)
+        "model1": load_model(args.retrain_dir, args.task1, args.seed1, device, args.randomize_m1),
+        "model2": load_model(args.retrain_dir, args.task2, args.seed2, device, args.randomize_m2),
+        "mask1": load_mask(args.mask_dir, args.task1, args.seed1, device, args.shuffle_mask1),
+        "mask2": load_mask(args.mask_dir, args.task2, args.seed2, device, args.shuffle_mask2)
     }
     return model_info
 
@@ -142,7 +154,7 @@ def calculate_similarities(args,
     """
     metric = get_metric_for(args.task2)
     is_vis = args.task2 in TASKS['vis']
-    model2_performance = evaluate(model_info['model2'], val_loader, metric, is_vis, mask=None)
+    model2_performance = evaluate(model_info['model2'], val_loader, metric, is_vis, mask=model_info['mask2'])
     Logger.info(f"Model2 metric: {model2_performance:.4f}")
 
     results = {"jaccard": [], "cka": [], "fs": []}
@@ -261,6 +273,18 @@ def parse_args(cli_args=None):
                         type=str,
                         default='results/compare/',
                         help="Directory to save the output. Default is './output'.")
+    parser.add_argument("--shuffle_mask1",
+                        action='store_true',
+                        help="Shuffle active heads in mask1. Default is False.")
+    parser.add_argument("--shuffle_mask2",
+                        action='store_true',
+                        help="Shuffle active heads in mask2. Default is False.")
+    parser.add_argument("--randomize_m1",
+                        action='store_true',
+                        help="Randomize weights of the first model. Default is False.")
+    parser.add_argument("--randomize_m2",
+                        action='store_true',
+                        help="Randomize weights of the second model. Default is False.")
     parser.add_argument("--debug", action='store_true', help="Run in debug mode. Default is False.")
 
     # Parse the arguments
