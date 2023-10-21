@@ -33,7 +33,9 @@ CONFIGS = {
     "compare_across_tasks": compare_task,
     "evaluate": evaluate_task,
     "shuffle_mask1": compare_task,
-    "shuffle_mask2": compare_task
+    "shuffle_mask2": compare_task,
+    "random_model1": compare_task,
+    "random_model2": compare_task,
 }
 
 
@@ -81,6 +83,18 @@ def shuffle_mask2(*args, **kwargs) -> str:
     if task is None:
         return None
     return task.strip() + " --shuffle_mask2 --out_dir results/shuffle_mask2/"
+
+def random_model1(*args, **kwargs) -> str:
+    task = compare_in_tasks(*args, **kwargs)
+    if task is None:
+        return None
+    return task.strip() + " --randomize_m1 --out_dir results/randomize_model1/"
+
+def random_model2(*args, **kwargs) -> str:
+    task = compare_in_tasks(*args, **kwargs)
+    if task is None:
+        return None
+    return task.strip() + " --randomize_m2 --out_dir results/randomize_model2/"
 
 
 def flatten(lst):
