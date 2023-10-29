@@ -1,20 +1,6 @@
-# coding=utf-8
-# Copyright 2018 The Google AI Language Team Authors and The HuggingFace Inc. team.
-# Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-""" Finetuning the library models for sequence classification on GLUE (Bert, XLM, XLNet, RoBERTa, Albert, XLM-RoBERTa)."""
-
+'''
+    Only minor modifications to https://github.com/VITA-Group/BERT-Tickets/blob/master/LT_glue.py#L353
+'''
 
 import argparse
 import glob
@@ -75,22 +61,23 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-ALL_MODELS = sum(
-    (
-        tuple(conf.pretrained_config_archive_map.keys())
-        for conf in (
-            BertConfig,
-            XLNetConfig,
-            XLMConfig,
-            RobertaConfig,
-            DistilBertConfig,
-            AlbertConfig,
-            XLMRobertaConfig,
-            FlaubertConfig,
-        )
-    ),
-    (),
-)
+# ALL_MODELS = sum(
+#     (
+#         tuple(conf.pretrained_config_archive_map.keys())
+#         for conf in (
+#             BertConfig,
+#             XLNetConfig,
+#             XLMConfig,
+#             RobertaConfig,
+#             DistilBertConfig,
+#             AlbertConfig,
+#             XLMRobertaConfig,
+#             FlaubertConfig,
+#         )
+#     ),
+#     (),
+# )
+ALL_MODELS=  ['A','B']# DUMMY not needed
 
 MODEL_CLASSES = {
     "bert": (BertConfig, BertForSequenceClassification, BertTokenizer),
@@ -163,7 +150,7 @@ def see_weight_rate(model):
     return 100*zero_sum/sum_list
 
 def rewind(pre_weight):
-
+    
     recover_dict = {}
     name_list = []
     for ii in range(12):
@@ -193,6 +180,9 @@ def train(args, train_dataset, model, tokenizer, orig):
 
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter()
+    #! debug configurations added by me
+    args.per_gpu_train_batch_size = 2 
+    args.save_steps = 2
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
@@ -227,12 +217,12 @@ def train(args, train_dataset, model, tokenizer, orig):
         optimizer.load_state_dict(torch.load(os.path.join(args.model_name_or_path, "optimizer.pt")))
         scheduler.load_state_dict(torch.load(os.path.join(args.model_name_or_path, "scheduler.pt")))
 
-    if args.fp16:
-        try:
-            from apex import amp
-        except ImportError:
-            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
-        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
+    # if args.fp16:
+    #     try:
+    #         from apex import amp
+    #     except ImportError:
+    #         raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
+    #     model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
 
     # multi-gpu training (should be after apex fp16 initialization)
     if args.n_gpu > 1:
@@ -307,11 +297,11 @@ def train(args, train_dataset, model, tokenizer, orig):
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
 
-            if args.fp16:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
+            # if args.fp16:
+            #     with amp.scale_loss(loss, optimizer) as scaled_loss:
+            #         scaled_loss.backward()
+            # else:
+            loss.backward()
 
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0 or (
@@ -319,10 +309,10 @@ def train(args, train_dataset, model, tokenizer, orig):
                 len(epoch_iterator) <= args.gradient_accumulation_steps
                 and (step + 1) == len(epoch_iterator)
             ):
-                if args.fp16:
-                    torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
-                else:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                # if args.fp16:
+                #     torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
+                # else:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
                 optimizer.step()
                 scheduler.step()  # Update learning rate schedule
@@ -356,11 +346,7 @@ def train(args, train_dataset, model, tokenizer, orig):
                     # output_dir = args.output_dir
                     if not os.path.exists(output_dir):
                         os.makedirs(output_dir)
-                    # model_to_save = (
-                    #     model.module if hasattr(model, "module") else model
-                    # )  # Take care of distributed/parallel training
-                    # model_to_save.save_pretrained(output_dir)
-                    # tokenizer.save_pretrained(output_dir)
+ 
                     torch.save(model,os.path.join(output_dir, "model.pt"))
                     
                     # torch.save(args, os.path.join(output_dir, "training_args.bin"))
@@ -374,7 +360,13 @@ def train(args, train_dataset, model, tokenizer, orig):
                     print('zero_rate = ', rate_weight_equal_zero)
 
                     print('rewinding')
-                    model_dict = model.state_dict()
+                    #! model_state_dict is the same with orig
+                    for key in orig.keys():
+                        assert(torch.all(model.state_dict()[key] == orig[key]).item())
+
+                    model_dict = model.state_dict() # different than pretrained
+
+
                     model_dict.update(orig)
                     model.load_state_dict(model_dict)
 
@@ -400,10 +392,6 @@ def train(args, train_dataset, model, tokenizer, orig):
                         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
                     )
 
-        
-                    # torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
-                    # torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
-                    # logger.info("Saving optimizer and scheduler states to %s", output_dir)
 
             if pruning_step == 10:
                 epoch_iterator.close()
@@ -560,23 +548,23 @@ def main():
     # Required parameters
     parser.add_argument(
         "--data_dir",
-        default=None,
+        default='/data/shared/data/',
         type=str,
-        required=True,
+        required=False,
         help="The input data dir. Should contain the .tsv files (or other data files) for the task.",
     )
     parser.add_argument(
         "--model_type",
-        default=None,
+        default='bert',
         type=str,
-        required=True,
+        required=False,
         help="Model type selected in the list: " + ", ".join(MODEL_CLASSES.keys()),
     )
     parser.add_argument(
         "--model_name_or_path",
-        default=None,
+        default='bert-base-uncased',
         type=str,
-        required=True,
+        required=False,
         help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS),
     )
     parser.add_argument(
@@ -595,16 +583,16 @@ def main():
     )
     parser.add_argument(
         "--task_name",
-        default=None,
+        default='cola',
         type=str,
-        required=True,
+        required=False,
         help="The name of the task to train selected in the list: " + ", ".join(processors.keys()),
     )
     parser.add_argument(
         "--output_dir",
-        default=None,
+        default='results/finetune/',
         type=str,
-        required=True,
+        required=False,
         help="The output directory where the model predictions and checkpoints will be written.",
     )
 
@@ -714,15 +702,6 @@ def main():
             )
         )
 
-    # Setup distant debugging if needed
-    if args.server_ip and args.server_port:
-        # Distant debugging - see https://code.visualstudio.com/docs/python/debugging#_attach-to-a-local-script
-        import ptvsd
-
-        print("Waiting for debugger attach")
-        ptvsd.enable_attach(address=(args.server_ip, args.server_port), redirect_output=True)
-        ptvsd.wait_for_attach()
-
     # Setup CUDA, GPU & distributed training
     if args.local_rank == -1 or args.no_cuda:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
@@ -793,62 +772,23 @@ def main():
     model.to(args.device)
 
     logger.info("Training/evaluation parameters %s", args)
+    args.do_train = True
 
     # Training
     if args.do_train:
-        train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False)
+        from src.data import load_glue_data
+        from src import Logger
+        Logger.initialise(False)
+        root = os.path.join(args.data_dir, "glue_data")
+        train_dataset = load_glue_data(data_dir=root,
+                                 task='cola',
+                                 dev=False,
+                                 overwrite_cache=False,
+                                 max_seq_length=128)
+
+        # train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False)
         global_step, tr_loss = train(args, train_dataset, model, tokenizer, origin_model_dict)
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
-
-    # # Saving best-practices: if you use defaults names for the model, you can reload it using from_pretrained()
-    # if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
-    #     # Create output directory if needed
-    #     if not os.path.exists(args.output_dir) and args.local_rank in [-1, 0]:
-    #         os.makedirs(args.output_dir)
-
-    #     logger.info("Saving model checkpoint to %s", args.output_dir)
-    #     # Save a trained model, configuration and tokenizer using `save_pretrained()`.
-    #     # They can then be reloaded using `from_pretrained()`
-    #     model_to_save = (
-    #         model.module if hasattr(model, "module") else model
-    #     )  # Take care of distributed/parallel training
-    #     model_to_save.save_pretrained(args.output_dir)
-    #     tokenizer.save_pretrained(args.output_dir)
-    #     torch.save(model, os.path.join(args.output_dir, "model.pt"))
-
-    #     # Good practice: save your training arguments together with the trained model
-    #     torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
-
-    #     # Load a trained model and vocabulary that you have fine-tuned
-    #     model = model_class.from_pretrained(args.output_dir)
-    #     tokenizer = tokenizer_class.from_pretrained(args.output_dir)
-    #     model.to(args.device)
-
-    # # Evaluation
-    # results = {}
-    # if args.do_eval and args.local_rank in [-1, 0]:
-    #     tokenizer = tokenizer_class.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
-    #     checkpoints = [args.output_dir]
-    #     if args.eval_all_checkpoints:
-    #         checkpoints = list(
-    #             os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + "/**/" + WEIGHTS_NAME, recursive=True))
-    #         )
-    #         logging.getLogger("transformers.modeling_utils").setLevel(logging.WARN)  # Reduce logging
-    #     logger.info("Evaluate the following checkpoints: %s", checkpoints)
-    #     for checkpoint in checkpoints:
-    #         global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
-    #         prefix = checkpoint.split("/")[-1] if checkpoint.find("checkpoint") != -1 else ""
-
-    #         model = model_class.from_pretrained(checkpoint)
-    #         model.to(args.device)
-    #         result = evaluate(args, model, tokenizer, prefix=prefix)
-    #         result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
-    #         results.update(result)
-    #     for key in results.keys():
-    #         print(key,results[key])
-
-
-    # return results
 
 
 if __name__ == "__main__":
