@@ -11,6 +11,7 @@ from src.mask_utils import mask_heads
 from src.static import TASKS
 from src.utils import set_memory_limit
 
+
 def main(args):
 
     set_memory_limit(50)
@@ -31,7 +32,13 @@ def main(args):
 
     # Get mask
     is_vis = args.task in TASKS['vis']
-    mask = mask_heads(model, test_loader, metric, args.stop_threshold, args.drop_ratio, is_vis)
+    mask = mask_heads(model,
+                      test_loader,
+                      metric,
+                      args.stop_threshold,
+                      args.drop_ratio,
+                      is_vis,
+                      args.fix_sparsity)
     Logger.info(f"Mask generation is done.")
 
     # Save mask
@@ -90,6 +97,10 @@ def parse_args(cli_args=None):
                         default='results/finetune/',
                         help="Directory which contains the finetuned models. " + \
                              "Default is 'results/finetune'")
+    parser.add_argument("--fix_sparsity",
+                        type=bool,
+                        action='store_true',
+                        help="If true, stop_threshold is used as sparsity level. Default is False.")
     parser.add_argument("--debug", action='store_true', help="Run in debug mode. Default is False.")
 
     # Parse the arguments

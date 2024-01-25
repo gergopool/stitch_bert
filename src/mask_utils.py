@@ -10,7 +10,7 @@ from .metrics import Metric
 
 def compute_heads_importance(
         model: nn.Module,
-        metric : Metric,
+        metric: Metric,
         data_loader: DataLoader,
         is_vis: bool = False,
         head_mask: torch.tensor = None) -> Tuple[torch.tensor, np.array, np.array]:
@@ -79,7 +79,8 @@ def mask_heads(model: nn.Module,
                metric,
                threshold: float = 0.9,
                masking_amount: float = 0.1,
-               is_vis: bool = False) -> torch.tensor:
+               is_vis: bool = False,
+               fix_sparsity: bool = False) -> torch.tensor:
     """
     Find masks based on importance scores as described in http://arxiv.org/abs/1905.10650
 
@@ -90,6 +91,7 @@ def mask_heads(model: nn.Module,
         threshold: The threshold for the performance loss.
         masking_amount: The percentage of heads to be masked.
         is_vis: If True, we assume it is a vision task.
+        fix_sparsity: If True, the masking amount will be fixed, otherwise it will be
 
     Returns:
         The binary mask for the heads.
@@ -108,7 +110,7 @@ def mask_heads(model: nn.Module,
         original_score = 1.
 
     current_score = original_score
-    while current_score >= stop_at:
+    while current_score >= stop_at or fix_sparsity:
         head_mask = new_head_mask.clone()  # save current head mask
 
         # Sort heads by importance
