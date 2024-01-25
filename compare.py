@@ -20,17 +20,42 @@ def randomize_mask(mask: torch.Tensor) -> torch.Tensor:
         mask[i] = row[torch.randperm(len(row))]
     return mask.T
 
+def full_randomize_mask(mask: torch.Tensor) -> torch.Tensor:
+    mask = mask.T
+
+    # Create new mask
+    new_mask = torch.zeros_like(mask, dtype=mask.dtype)
+
+    # Initialize counts
+    counts = torch.ones(len(mask[0]), dtype=torch.long)
+    heads_left = mask.sum().long() - len(mask)
+
+    # Fill up the new mask
+    for _ in range(heads_left):
+        space_ready = (counts < len(mask[0])).float()
+        row_pick = torch.multinomial(space_ready, 1)[0]
+        new_mask[row_pick, counts[row_pick]] += 1
+        counts[row_pick] += 1
+
+    # Shuffle the new mask
+    for i, row in enumerate(new_mask):
+        new_mask[i] = row[torch.randperm(len(row))]
+
+    return new_mask.T
 
 def load_mask(mask_dir: str,
               task: str,
               seed: int,
               device: torch.device,
-              randomize: bool = False) -> torch.Tensor:
+              randomize: bool = False,
+              full_shuffle: bool = False) -> torch.Tensor:
     mask_path = os.path.join(mask_dir, f"{task}_{seed}.pt")
     head_mask = torch.load(mask_path, map_location=device)
     Logger.info(f"Loaded mask from file {mask_path}.")
-    if randomize:
+    if randomize and not full_shuffle:
         head_mask = randomize_mask(head_mask)
+    if full_shuffle:
+        head_mask = full_randomize_mask(head_mask)
     return head_mask
 
 
@@ -62,11 +87,13 @@ def load_models_and_masks(args, device: torch.device) -> Dict[str, Union[nn.Modu
     Returns:
         Dictionary containing the loaded models and masks.
     """
+    folder = args.finetune_dir if args.use_finetuned else args.retrain_dir
+
     model_info = {
-        "model1": load_model(args.retrain_dir, args.task1, args.seed1, device, args.randomize_m1),
-        "model2": load_model(args.retrain_dir, args.task2, args.seed2, device, args.randomize_m2),
-        "mask1": load_mask(args.mask_dir, args.task1, args.seed1, device, args.shuffle_mask1),
-        "mask2": load_mask(args.mask_dir, args.task2, args.seed2, device, args.shuffle_mask2)
+        "model1": load_model(folder, args.task1, args.seed1, device, args.randomize_m1),
+        "model2": load_model(folder, args.task2, args.seed2, device, args.randomize_m2),
+        "mask1": load_mask(args.mask_dir, args.task1, args.seed1, device, args.shuffle_mask1, full_shuffle=args.full_shuffle_mask1),
+        "mask2": load_mask(args.mask_dir, args.task2, args.seed2, device, args.shuffle_mask2, full_shuffle=False)
     }
     return model_info
 
@@ -265,6 +292,11 @@ def parse_args(cli_args=None):
                         default='results/retrained/',
                         help="Directory which contains the retrained models. " + \
                              "Default is 'results/retrained/'.")
+    parser.add_argument("--finetune_dir",
+                        type=str,
+                        default='results/finetune/',
+                        help="Directory which contains the finetuned models. " + \
+                             "Default is 'results/finetune/'.")
     parser.add_argument("--mask_dir",
                         type=str,
                         default='results/masks/',
@@ -276,6 +308,9 @@ def parse_args(cli_args=None):
     parser.add_argument("--shuffle_mask1",
                         action='store_true',
                         help="Shuffle active heads in mask1. Default is False.")
+    parser.add_argument("--full_shuffle_mask1",
+                        action='store_true',
+                        help="Shuffle active heads in mask1 ignoring structure. Default is False.")
     parser.add_argument("--shuffle_mask2",
                         action='store_true',
                         help="Shuffle active heads in mask2. Default is False.")
@@ -285,6 +320,9 @@ def parse_args(cli_args=None):
     parser.add_argument("--randomize_m2",
                         action='store_true',
                         help="Randomize weights of the second model. Default is False.")
+    parser.add_argument("--use_finetuned",
+                        action='store_true',
+                        help="Do not use the retrained version of models. Default is False.")
     parser.add_argument("--debug", action='store_true', help="Run in debug mode. Default is False.")
 
     # Parse the arguments

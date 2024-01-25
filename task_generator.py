@@ -34,9 +34,25 @@ CONFIGS = {
     "evaluate": evaluate_task,
     "shuffle_mask1": compare_task,
     "shuffle_mask2": compare_task,
+    "shuffle_all": compare_task,
     "random_model1": compare_task,
     "random_model2": compare_task,
+    "compare_in_tasks_no_retrain": compare_task,
+    "compare_across_tasks_no_retrain": compare_task,
+    "shuffle_mask1_no_retrain": compare_task,
+    "shuffle_all_no_retrain": compare_task,
+    "random_model1_no_retrain": compare_task
 }
+
+def _use_finetuned(func, *args, **kwargs) -> str:
+    normal = func(*args, **kwargs)
+    if normal is None:
+        return None
+    normal = normal.replace("results/", "results_finetuned/")
+    if "--out_dir" not in normal:
+        normal = normal + " --out_dir results_finetuned/compare"
+    return normal + " --use_finetuned"
+
 
 
 def train(task: str, seed: int) -> str:
@@ -62,6 +78,9 @@ def compare_in_tasks(task1: str, seed1: int, task2: str, seed2: int) -> str:
         return None
     return f"python compare.py {task1} {seed1} {task2} {seed2} --stitch-type linear"
 
+def compare_in_tasks_no_retrain(task1: str, seed1: int, task2: str, seed2: int) -> str:
+    return _use_finetuned(compare_in_tasks, task1, seed1, task2, seed2)
+
 
 def compare_across_tasks(task1: str, seed1: int, task2: str, seed2: int) -> str:
     stop_criteria1 = not ((task1 in TASKS['vis']) == (task2 in TASKS['vis']))
@@ -71,6 +90,8 @@ def compare_across_tasks(task1: str, seed1: int, task2: str, seed2: int) -> str:
         return None
     return f"python compare.py {task1} {seed1} {task2} {seed2} --stitch-type linear"
 
+def compare_across_tasks_no_retrain(task1: str, seed1: int, task2: str, seed2: int) -> str:
+    return _use_finetuned(compare_across_tasks, task1, seed1, task2, seed2)
 
 def shuffle_mask1(*args, **kwargs) -> str:
     task = compare_in_tasks(*args, **kwargs)
@@ -78,17 +99,32 @@ def shuffle_mask1(*args, **kwargs) -> str:
         return None
     return task.strip() + " --shuffle_mask1 --out_dir results/shuffle_mask1/"
 
+def shuffle_mask1_no_retrain(*args, **kwargs) -> str:
+    return _use_finetuned(shuffle_mask1, *args, **kwargs)
+
 def shuffle_mask2(*args, **kwargs) -> str:
     task = compare_in_tasks(*args, **kwargs)
     if task is None:
         return None
     return task.strip() + " --shuffle_mask2 --out_dir results/shuffle_mask2/"
 
+def shuffle_all(*args, **kwargs) -> str:
+    task = compare_in_tasks(*args, **kwargs)
+    if task is None:
+        return None
+    return task.strip() + " --full_shuffle_mask1 --out_dir results/shuffle_mask1_full/"
+
+def shuffle_all_no_retrain(*args, **kwargs) -> str:
+    return _use_finetuned(shuffle_all, *args, **kwargs)
+
 def random_model1(*args, **kwargs) -> str:
     task = compare_in_tasks(*args, **kwargs)
     if task is None:
         return None
     return task.strip() + " --randomize_m1 --out_dir results/randomize_model1/"
+
+def random_model1_no_retrain(*args, **kwargs) -> str:
+    return _use_finetuned(random_model1, *args, **kwargs)
 
 def random_model2(*args, **kwargs) -> str:
     task = compare_in_tasks(*args, **kwargs)

@@ -65,7 +65,8 @@ def main(args):
 
     for folder in args.compare_folders:
         root = os.path.join(args.compare_root, folder, "linear")
-        process_comparison(root, args.out_dir, save_name=folder)
+        if os.path.isdir(root):
+            process_comparison(root, args.out_dir, save_name=folder)
 
 
 def parse_args(cli_args=None):
@@ -89,7 +90,7 @@ def parse_args(cli_args=None):
         "--compare_folders",
         type=list,
         nargs="+",
-        default=['compare', 'randomize_model1', 'randomize_model2', 'shuffle_mask1', 'shuffle_mask2'],
+        default=['compare', 'randomize_model1', 'randomize_model2', 'shuffle_mask1', 'shuffle_mask2', 'full_shuffle_mask1'],
         help="Subdirectories which contain the comparisons.")
 
     # Parse the arguments

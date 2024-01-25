@@ -3,6 +3,7 @@ results/
 tasks/*.done
 tasks/*/*.out
 notebooks/
+results_finetuned
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
