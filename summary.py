@@ -81,17 +81,22 @@ def parse_args(cli_args=None):
                         type=str,
                         default='results/summary/',
                         help="Directory to save the output. Default is './results/evaluate'.")
-    parser.add_argument(
-        "--compare_root",
-        type=str,
-        default='results/',
-        help="Directory which contains the comparisons. Default is 'results/'.")
-    parser.add_argument(
-        "--compare_folders",
-        type=list,
-        nargs="+",
-        default=['compare', 'randomize_model1', 'randomize_model2', 'shuffle_mask1', 'shuffle_mask2', 'full_shuffle_mask1'],
-        help="Subdirectories which contain the comparisons.")
+    parser.add_argument("--compare_root",
+                        type=str,
+                        default='results/',
+                        help="Directory which contains the comparisons. Default is 'results/'.")
+    parser.add_argument("--compare_folders",
+                        type=list,
+                        nargs="+",
+                        default=[
+                            'compare',
+                            'randomize_model1',
+                            'randomize_model2',
+                            'shuffle_mask1',
+                            'shuffle_mask2',
+                            'full_shuffle_mask1'
+                        ],
+                        help="Subdirectories which contain the comparisons.")
 
     # Parse the arguments
     args = parser.parse_args(cli_args)
