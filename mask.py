@@ -1,45 +1,37 @@
 import os
 import argparse
 import torch
-from transformers import AutoTokenizer
-from torch.utils.data import DataLoader
 
 # Import custom modules
 from src import Logger, GlobalState
-from src.data import load_glue_data_from_args
-from src.models import build_pretrained_transformer
-from src.glue_metrics import get_metric_for
+from src.data import load_data_from_args
+from src.models import load_model
+from src.metrics import get_metric_for
 from src.mask_utils import mask_heads
-
+from src.static import TASKS
+from src.utils import set_memory_limit
 
 def main(args):
 
-    # Build and load model
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model_path = os.path.join(args.finetune_dir, f"{args.task}_{args.seed}.pt")
-    model = build_pretrained_transformer(args.model_type, args.task)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    Logger.info(f"Model loaded from file {model_path}.")
-    model.eval()
+    set_memory_limit(50)
 
-    # Create dataloader
-    tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=False)
-    val_dataset = load_glue_data_from_args(args, tokenizer, dev=True)
-    batch_size = args.batch_size if not GlobalState.debug else 4
-    test_loader = DataLoader(val_dataset,
-                             batch_size=batch_size,
-                             shuffle=False,
-                             pin_memory=True,
-                             drop_last=False,
-                             num_workers=2)
-    Logger.info(f"Dataloader initialized.")
+    # Initialize logging and debug mode
+    GlobalState.debug = args.debug
+    Logger.initialise(args.debug)
+
+    # Load data
+    test_loader = load_data_from_args(args, dev=True)
+
+    # Initialize the pre-trained transformer
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = load_model(args.finetune_dir, args.task, args.seed, device)
 
     # Get the metric
     metric = get_metric_for(args.task)
 
     # Get mask
-    mask = mask_heads(model, test_loader, metric, args.stop_threshold, args.drop_ratio)
+    is_vis = args.task in TASKS['vis']
+    mask = mask_heads(model, test_loader, metric, args.stop_threshold, args.drop_ratio, is_vis)
     Logger.info(f"Mask generation is done.")
 
     # Save mask
@@ -52,15 +44,14 @@ def main(args):
         Logger.info(f"Mask is not saved in debug mode.")
 
 
-def parse_args():
+def parse_args(cli_args=None):
 
     parser = argparse.ArgumentParser()
 
     # Define the argparse arguments
     parser.add_argument("task",
                         type=str,
-                        choices=['cola', 'mnli', 'mrpc', 'qnli', \
-                                 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli',],
+                        choices=TASKS['vis'] + TASKS['nlp'],
                         help="Name of the task (dataset).")
     parser.add_argument("seed",
                         type=int,
@@ -68,12 +59,8 @@ def parse_args():
                              "it has no effect on the results.")
     parser.add_argument("--data_dir",
                         type=str,
-                        default='/data/shared/data/glue_data',
+                        default='/data/shared/data/',
                         help="Directory where the data is located.")
-    parser.add_argument("--model_type",
-                        type=str,
-                        default='bert-base-uncased',
-                        help="Type of the model. Default is 'bert-base-uncased'.")
     parser.add_argument("--stop_threshold",
                         type=float,
                         default=0.9,
@@ -106,7 +93,7 @@ def parse_args():
     parser.add_argument("--debug", action='store_true', help="Run in debug mode. Default is False.")
 
     # Parse the arguments
-    args = parser.parse_args()
+    args = parser.parse_args(cli_args)
 
     return args
 
@@ -114,10 +101,6 @@ def parse_args():
 if __name__ == "__main__":
     # Parse the command line arguments
     args = parse_args()
-
-    # Initialize logging and debug mode
-    GlobalState.debug = args.debug
-    Logger.initialise(args.debug)
 
     # Execute the main function
     main(args)

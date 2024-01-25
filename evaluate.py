@@ -1,26 +1,14 @@
 import argparse
 import torch
 import os
-from transformers import AutoTokenizer
-from torch import nn
-from torch.utils.data import DataLoader, Dataset
+import pickle
 
-from train import load_datasets
-from src.utils import set_seed
-from src.static import Logger, GlobalState
-from src.models import build_pretrained_transformer
-from src.glue_metrics import get_metric_for, Metric
+from src.data import load_data_from_args
+from src.static import Logger, GlobalState, TASKS
+from src.models import load_model
+from src.metrics import get_metric_for
 from src.evaluator import evaluate
-
-
-def load_model(model_root: str, model_type: str, task: str, seed: int,
-               device: torch.device) -> nn.Module:
-    model_path = os.path.join(model_root, f"{task}_{seed}.pt")
-    model = build_pretrained_transformer(model_type, task)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    Logger.info(f"Model loaded from file {model_path}.")
-    model.eval()
-    return model
+from src.utils import set_memory_limit
 
 
 def load_mask(mask_dir: str, task: str, seed: int, device: torch.device) -> torch.Tensor:
@@ -30,53 +18,63 @@ def load_mask(mask_dir: str, task: str, seed: int, device: torch.device) -> torc
     return head_mask
 
 
-def get_model_performance(val_dataset: Dataset,
-                          model: nn.Module,
-                          head_mask: torch.Tensor,
-                          metric: Metric) -> float:
-    data_loader = DataLoader(val_dataset,
-                             batch_size=32,
-                             shuffle=False,
-                             pin_memory=True,
-                             drop_last=False)
-    return evaluate(model, data_loader, metric, head_mask)
-
-
 def main(args):
+
+    set_memory_limit(50)
+
+    # Initialize logging and debug mode
+    GlobalState.debug = args.debug
+    Logger.initialise(args.debug)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # Initialize the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model_type, use_fast=False)
-    Logger.info("Tokenizer initialized.")
+    # Load data
+    test_loader = load_data_from_args(args, dev=True)
 
     # Load model and mask
-    model = load_model(args.retrain_dir, args.model_type, args.task, args.seed, device)
+    trained_model = load_model(args.train_dir, args.task, args.seed, device)
+    retrained_model = load_model(args.retrain_dir, args.task, args.seed, device)
     head_mask = load_mask(args.mask_dir, args.task, args.seed, device)
 
-    # Load dataset & metric
-    _, val_dataset = load_datasets(args, tokenizer)
+    # Load metric
     metric = get_metric_for(args.task)
 
     # Get benchmark performance
-    performance = get_model_performance(val_dataset, model, head_mask, metric)
-    Logger.info(f"Model metric: {performance:.4f}")
+    is_vis = args.task in TASKS['vis']
+    results = {}
+    results['mask_sparsity'] = head_mask.sum().item() / head_mask.numel()
+    results['orig'] = evaluate(trained_model, test_loader, metric, is_vis, mask=None)
+    results['masked'] = evaluate(trained_model, test_loader, metric, is_vis, mask=head_mask)
+    results['retrained'] = evaluate(retrained_model, test_loader, metric, is_vis, mask=head_mask)
+
+    Logger.info(f"Mask sparsity                           : {results['mask_sparsity']*100:.2f}%")
+    Logger.info(f"Original finetuned performance          : {results['orig']:.4f}")
+    Logger.info(f"Masked, without re-training performance : {results['masked']:.4f}")
+    Logger.info(f"Masked, with retraining performance     : {results['retrained']:.4f}")
+
+    if not GlobalState.debug:
+        save_path = os.path.join(args.out_dir, f"{args.task}_{args.seed}.pkl")
+        os.makedirs(args.out_dir, exist_ok=True)
+        with open(save_path, 'wb') as f:
+            pickle.dump(results, f)
+        Logger.info(f"Results saved to {save_path}")
+    else:
+        Logger.info(f"Results not saved due to debug mode.")
 
 
-def parse_args():
+def parse_args(cli_args=None):
 
     parser = argparse.ArgumentParser()
 
     # Define the argparse arguments
-    parser.add_argument(
-        "task",
-        type=str,
-        choices=['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst-2', 'sts-b', 'wnli'],
-        help="Name of the task (dataset).")
+    parser.add_argument("task",
+                        type=str,
+                        choices=TASKS['vis'] + TASKS['nlp'],
+                        help="Name of the task (dataset).")
     parser.add_argument("seed", type=int, help="The seed of the run, for reproducibility.")
     parser.add_argument("--data_dir",
                         type=str,
-                        default='/data/shared/data/glue_data',
+                        default='/data/shared/data',
                         help="Directory where the data is located.")
     parser.add_argument("--model_type",
                         type=str,
@@ -86,14 +84,24 @@ def parse_args():
                         type=int,
                         default=128,
                         help="Maximum sequence length for the tokenized data. Default is 128.")
+    parser.add_argument("--batch_size", type=int, default=128, help="Batch size. Default is 128.")
     parser.add_argument("--overwrite_cache",
                         action='store_true',
                         help="If True, overwrite the cached data. Default is False.")
+    parser.add_argument("--train_dir",
+                        type=str,
+                        default='results/finetune/',
+                        help="Directory which contains the finetuned models. " + \
+                             "Default is 'results/finetune/'.")
     parser.add_argument("--retrain_dir",
                         type=str,
                         default='results/retrained/',
                         help="Directory which contains the retrained models. " + \
                              "Default is 'results/retrained/'.")
+    parser.add_argument("--out_dir",
+                        type=str,
+                        default='results/evaluate/',
+                        help="Directory to save the output. Default is './results/evaluate'.")
     parser.add_argument("--mask_dir",
                         type=str,
                         default='results/masks/',
@@ -101,7 +109,7 @@ def parse_args():
     parser.add_argument("--debug", action='store_true', help="Run in debug mode. Default is False.")
 
     # Parse the arguments
-    args = parser.parse_args()
+    args = parser.parse_args(cli_args)
 
     return args
 
@@ -109,10 +117,6 @@ def parse_args():
 if __name__ == "__main__":
 
     args = parse_args()
-
-    # Initialize logging and debug mode
-    GlobalState.debug = args.debug
-    Logger.initialise(args.debug)
 
     # Execute the main function
     main(args)

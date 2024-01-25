@@ -2,21 +2,25 @@ import torch
 import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from transformers import BertForSequenceClassification as Bert
+from torch import nn
 from typing import Tuple
 from .static import Logger, GlobalState
+from .metrics import Metric
 
 
 def compute_heads_importance(
-        model: Bert,
+        model: nn.Module,
+        metric : Metric,
         data_loader: DataLoader,
+        is_vis: bool = False,
         head_mask: torch.tensor = None) -> Tuple[torch.tensor, np.array, np.array]:
     """
     Compute the head importance scores according to http://arxiv.org/abs/1905.10650
 
     Args:
-        model: The Bert model.
+        model: The transformer model.
         data_loader: DataLoader for the dataset.
+        is_vis: If True, we assume it is a vision task.
         head_mask: Binary mask to apply to the heads. If None, no mask is applied.
 
     Returns:
@@ -25,7 +29,7 @@ def compute_heads_importance(
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    n_layers, n_heads = model.bert.config.num_hidden_layers, model.bert.config.num_attention_heads
+    n_layers, n_heads = model.config.num_hidden_layers, model.config.num_attention_heads
     head_importance = torch.zeros(n_layers, n_heads).to(device)
 
     # Prepare the head mask
@@ -33,19 +37,24 @@ def compute_heads_importance(
     head_mask = head_mask.to(device)
     head_mask.requires_grad_(True)
 
-    preds, labels = [], []
-    tot_tokens = 0.0
+    metric.reset()
 
     fake_opt = torch.optim.Adam([head_mask] + list(model.parameters()), lr=0.0)
 
     for iter_i, batch in enumerate(tqdm(data_loader, desc="Importance score computation")):
-        input_ids, input_mask, segment_ids, label_ids = tuple(t.to(device) for t in batch)
 
-        outputs = model(input_ids,
-                        token_type_ids=segment_ids,
-                        attention_mask=input_mask,
-                        labels=label_ids,
-                        head_mask=head_mask)
+        batch = tuple(t.to(device) for t in batch)
+        if is_vis:
+            inputs = {"pixel_values": batch[0], "labels": batch[1]}
+        else:
+            inputs = {
+                "input_ids": batch[0],
+                "token_type_ids": batch[2],
+                "attention_mask": batch[1],
+                "labels": batch[3]
+            }
+
+        outputs = model(**inputs, head_mask=head_mask)
         loss, logits = outputs[:2]
 
         # Backward pass to compute gradients
@@ -53,26 +62,24 @@ def compute_heads_importance(
         loss.backward()
         head_importance += head_mask.grad.abs().detach()
 
-        preds.append(logits.detach().cpu())
-        labels.append(label_ids.detach().cpu())
-        tot_tokens += input_mask.float().detach().sum().data
+        metric.accumulate(logits.detach().cpu().numpy(), inputs['labels'].detach().cpu().numpy())
 
         if GlobalState.debug and iter_i >= 2:
             Logger.info("Breaking the loop for debug purposes.")
             break
 
     # Normalize the importance over layers
-    head_importance /= tot_tokens
     head_importance = torch.nn.functional.normalize(head_importance, p=2, dim=-1)
 
-    return head_importance, torch.cat(preds, dim=0).numpy(), torch.cat(labels, dim=0).numpy()
+    return head_importance, metric.value
 
 
-def mask_heads(model: Bert,
+def mask_heads(model: nn.Module,
                eval_dataloader: DataLoader,
                metric,
                threshold: float = 0.9,
-               masking_amount: float = 0.1) -> torch.tensor:
+               masking_amount: float = 0.1,
+               is_vis: bool = False) -> torch.tensor:
     """
     Find masks based on importance scores as described in http://arxiv.org/abs/1905.10650
 
@@ -82,13 +89,13 @@ def mask_heads(model: Bert,
         metric: The metric to be used for evaluation.
         threshold: The threshold for the performance loss.
         masking_amount: The percentage of heads to be masked.
+        is_vis: If True, we assume it is a vision task.
 
     Returns:
         The binary mask for the heads.
     """
     # Compute importance scores
-    head_importance, preds, labels = compute_heads_importance(model, eval_dataloader)
-    original_score = metric(preds, labels)
+    head_importance, original_score = compute_heads_importance(model, metric, eval_dataloader, is_vis)
     stop_at = original_score * threshold
     Logger.info(f"Pruning: original score: {original_score:.2f}, threshold: {stop_at:.2f}")
 
@@ -117,12 +124,12 @@ def mask_heads(model: Bert,
 
         # Mask heads
         for head in selected_heads_to_mask:
-            layer_idx = head.item() // model.bert.config.num_attention_heads
-            head_idx = head.item() % model.bert.config.num_attention_heads
+            layer_idx = head.item() // model.config.num_attention_heads
+            head_idx = head.item() % model.config.num_attention_heads
             new_head_mask[layer_idx][head_idx] = 0.0
 
-        head_importance, preds, labels = compute_heads_importance(model, eval_dataloader, head_mask=new_head_mask)
-        current_score = metric(preds, labels)
+        head_importance, current_score = compute_heads_importance(
+            model, metric, eval_dataloader, is_vis, head_mask=new_head_mask)
         performance_meter = current_score / original_score * 100.
         orig_size = new_head_mask.numel()
         new_size = int(new_head_mask.sum())

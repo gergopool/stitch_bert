@@ -1,1 +1,1 @@
-from .static import Logger, GlobalState
+from .static import Logger, GlobalState, TASKS

@@ -12,7 +12,7 @@ import re
 from tqdm import tqdm
 
 
-def parse_args(args):
+def parse_args(cli_args=None):
     parser = argparse.ArgumentParser(description='Simple settings.')
     parser.add_argument('in_file', type=str, help='Path to the input file')
     parser.add_argument('-g', '--gpus', nargs="+", help='E.g. 0 0 1 1', required=True)
@@ -23,10 +23,10 @@ def parse_args(args):
                         required=False)
     parser.add_argument('-l',
                         '--log-dir',
-                        default=None,
+                        default="tasks/logs",
                         help='If None no log wil be created',
                         required=False)
-    return parser.parse_args(args)
+    return parser.parse_args(cli_args)
 
 
 def read_tasks(in_file: str) -> set:
